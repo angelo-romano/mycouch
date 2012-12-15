@@ -1,0 +1,12 @@
+fabric
+Flask
+Flask-Babel
+Flask-OAuth
+~/virtualenvs/flask-restless2/ # Flask-Restless
+Flask-Script
+Flask-SQLAlchemy
+Flask-WTF
+geoalchemy
+jsonpickle
+psycopg2
+simplejson
