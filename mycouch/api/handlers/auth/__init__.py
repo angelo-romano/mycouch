@@ -1,11 +1,9 @@
-from flask import request, redirect, url_for, jsonify, make_response
+from flask import request
 from flask.views import MethodView
-from flaskext.auth import login_required, logout, get_current_user_data
-from flaskext.auth.models.sa import get_user_class
-from geoalchemy import WKTSpatialElement
-from mycouch import app, db
+from flaskext.auth import logout
 from mycouch.api.handlers.users import UserByIDHandler
-from mycouch.models import User, City
+from mycouch.api.utils import jsonify
+from mycouch.models import User
 
 
 class AuthHandler(MethodView):

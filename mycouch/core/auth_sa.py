@@ -2,12 +2,13 @@
 Module to provide plug-and-play authentication support for SQLAlchemy.
 """
 import datetime
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, and_
 from flaskext.auth import AuthUser, get_current_user_data
+
 
 def get_user_class(declarative_base):
     """
-    Factory function to create an SQLAlchemy User model with a declarative 
+    Factory function to create an SQLAlchemy User model with a declarative.
     base (for example db.Model from the Flask-SQLAlchemy extension).
     """
     class User(declarative_base, AuthUser):
@@ -23,6 +24,7 @@ def get_user_class(declarative_base):
         role = Column(String(80))
         created = Column(DateTime(), default=datetime.datetime.utcnow)
         modified = Column(DateTime())
+        is_active = Column(Boolean, default=True, nullable=False)
 
         def __init__(self, *args, **kwargs):
             super(User, self).__init__(*args, **kwargs)
@@ -46,6 +48,8 @@ def get_user_class(declarative_base):
             data = get_current_user_data(apply_timeout)
             if not data:
                 return None
-            return cls.query.filter(cls.username==data['username']).one()
+            return cls.query.filter(and_(
+                cls.username == data['username'],
+                cls.is_active)).one()
 
     return User

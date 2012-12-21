@@ -13,56 +13,60 @@ class CityCounter(object):
     town_levels = [
         'city', 'town']
     subtown_levels = [
-        'village', 'hamlet']
+        'village']
     suburb_levels = [
-        'suburb', 'neighbourhood']
+        'hamlet', 'suburb', 'neighbourhood']
+    entries_main = None
+    entries_sub = None
+
+    def __init__(self, country_code):
+        self.country_code = country_code
+        self.entries_main = []
+        self.entries_sub = []
 
     def relations(self, ways):
         global _tags
         # callback method for ways
         for this_entry in ways:
-            osmid, tags, entries = this_entry
+            osmid, tags, coords = this_entry
             name = force_str(tags.get('name'))# or tags.get('name:en') or u'')
             place = tags.get('place')
+            if name.startswith('Ellange'):
+                print tags, coords
             if place in self.town_levels:
-                print '1 %s' % name
+                self.entries_main.append((('name', name), ('coords', coords)))
             if place in self.subtown_levels:
-                print '2 %s' % name
+                if 'is_in' not in tags:
+                    self.entries_main.append((('name', name), ('coords', coords)))
+                else:
+                    self.entries_sub.append((('name', name), ('coords', coords)))
             elif place in self.suburb_levels:
-                print '3 %s' % name
-            #if 'name' in tags and 'Vella' in tags['name']:
-            #    print osmid, filter(lambda x: not x.startswith('name'),
-            #            tags.keys()), tags['place'], tags['admin_level']
-            #_tags = _tags.union(tags)
-            self.cnt += 1
+                self.entries_sub.append((('name', name), ('coords', coords)))
 
     def nodes(self, ways):
         global _tags
         # callback method for ways
         for this_entry in ways:
-            osmid, tags, entries = this_entry
+            osmid, tags, coords = this_entry
             place = tags.get('place')
             name = force_str(tags.get('name'))# or tags.get('name:en') or u'')
+            if name.startswith('Ellange'):
+                print tags, coords
             if place in self.town_levels:
-                print '1 %s' % name
+                self.entries_main.append((('name', name), ('coords', coords)))
             if place in self.subtown_levels:
-                print '2 %s' % name
+                if 'is_in' not in tags:
+                    self.entries_main.append((('name', name), ('coords', coords)))
+                else:
+                    self.entries_sub.append((('name', name), ('coords', coords)))
             elif place in self.suburb_levels:
-                print '3 %s' % name
-            #if 'name' in tags and 'Vella' in tags['name']:
-            #    print osmid, filter(lambda x: not x.startswith('name'),
-            #            tags.keys()), tags['place'], tags['admin_level']
-            #_tags = _tags.union(tags)
-            self.cnt += 1
+                self.entries_sub.append((('name', name), ('coords', coords)))
+
 
 if __name__ == '__main__':
-    fname = os.path.abspath(sys.argv[1])
+    fname, country_code = os.path.abspath(sys.argv[1]), sys.argv[2]
     # instantiate counter and parser and start parsing
-    counter = CityCounter()
+    counter = CityCounter(country_code)
     p = OSMParser(concurrency=4, nodes_callback=counter.nodes,
-            relations_callback=counter.relations)
+                  relations_callback=counter.relations)
     p.parse(fname)
-
-    # done
-    print counter.cnt
-    #for t in sorted(list(_tags)):

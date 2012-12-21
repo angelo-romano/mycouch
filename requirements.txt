@@ -1,4 +1,5 @@
 fabric
+fixture
 Flask
 Flask-Babel
 Flask-OAuth

@@ -76,6 +76,10 @@ def serialize_db_value(val):
     return val
 
 
+def datetime_from_json(val):
+    return datetime.strptime(val, '%Y-%m-%dT%H:%M:%S')
+
+
 def slugify(text, separator="-"):
     ret = ""
     for c in text.lower():

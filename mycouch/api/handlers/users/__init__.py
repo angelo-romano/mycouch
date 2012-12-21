@@ -1,11 +1,11 @@
-from flask import request, redirect, url_for, jsonify, make_response
+from flask import request, url_for
 from flask.views import MethodView
-from flaskext.auth import login_required, logout, get_current_user_data
-from flaskext.auth.models.sa import get_user_class
-from geoalchemy import WKTSpatialElement
+from flaskext.auth import login_required
 from mycouch import app, db
-from mycouch.models import User, City
+from mycouch.api.utils import jsonify
+from mycouch.models import User
 from functools import wraps
+
 
 def only_this_user(fn):
     @wraps(fn)
@@ -41,13 +41,14 @@ class UserHandler(MethodView):
             password=request.json.get('password'))
 
         optional_params = dict(
+            city_id=request.json.get('city_id'),
             websites=request.json.get('websites') or '')
 
         if not all(params.values()):
-            return (jsonify(error=True), 300, [])
+            return (jsonify(error=True), 400, [])
 
         params.update(optional_params)
-
+        print params
         user = User(**params)
         user.save(commit=True)
         return jsonify(user.serialized)
@@ -71,9 +72,8 @@ class UserByIDHandler(MethodView):
             first_name=request.json.get('first_name'),
             last_name=request.json.get('last_name'),
             email=request.json.get('email'),
+            city_id=request.json.get('city_id'),
             websites=request.json.get('websites') or '')
-
-        params.update(optional_params)
 
         for (key, val) in params.iteritems():
             curval = getattr(user, key, None)

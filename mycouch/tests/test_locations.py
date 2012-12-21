@@ -37,6 +37,16 @@ class LocationTestCase(unittest.TestCase):
             'longitude': Decimal('9.8000000000000007'),
             'wikiname': 'Hobro',
             'type': 'city'}
+        data2 = {
+            'rating': Decimal('1.80019736'),
+            'name': 'Hoddesdon',
+            'country_code': 'GBR',
+            'latitude': Decimal('51.7500000000000000'),
+            'timezone': 0,
+            'type': 'city',
+            'slug': 'hoddesdon',
+            'longitude': Decimal('0E-16'),
+            'wikiname': 'Hoddesdon'}
         # CREATING CITY [ERROR]
         data['type'] = 'not_a_city'
         resp = self.app.post('/locations/%s' % data['type'],

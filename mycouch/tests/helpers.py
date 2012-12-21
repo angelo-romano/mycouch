@@ -49,9 +49,7 @@ def prepare_database():
         host=DATABASE_CONFIG['host'])
     db_conn.autocommit = True
     cur = db_conn.cursor()
-    try:
-        cur.execute('DROP DATABASE %s;' % DATABASE_CONFIG['dbname'])
-    except:
-        pass
-    cur.execute('CREATE DATABASE %s TEMPLATE mycouch;' % DATABASE_CONFIG['dbname'])
+    cur.execute('DROP DATABASE %s;' % DATABASE_CONFIG['dbname'])
+    cur.execute('CREATE DATABASE %s TEMPLATE mycouch_template;'
+        % DATABASE_CONFIG['dbname'])
     db_conn.close()

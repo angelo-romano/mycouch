@@ -1,10 +1,9 @@
-from flask import request, redirect, url_for, jsonify, make_response
+from flask import request
 from flask.views import MethodView
-from flaskext.auth import login_required, logout, get_current_user_data
-from flaskext.auth.models.sa import get_user_class
+from flaskext.auth import login_required
 from geoalchemy import WKTSpatialElement
-from mycouch import app, db
-from mycouch.models import User, City
+from mycouch.api.utils import jsonify
+from mycouch.models import City
 
 
 LOCATION_TYPE_MAPPING = {
@@ -16,6 +15,7 @@ class LocationHandler(MethodView):
     __base_uri__ = '/locations/<loctype>'
     __resource_name__ = 'locations'
 
+    @login_required()
     def post(self, loctype):
         if loctype not in LOCATION_TYPE_MAPPING:
             return ('TYPE', '400', [])
@@ -27,13 +27,13 @@ class LocationHandler(MethodView):
             latitude=request.json.get('latitude'),
             longitude=request.json.get('longitude'))
 
-        optional_params=dict(
+        optional_params = dict(
             rating=request.json.get('rating'),
             timezone=request.json.get('timezone'),
             slug=request.json.get('slug'),
             wikiname=request.json.get('wikiname'))
 
-        if not all(params.values()):
+        if not all([v not in (None, '') for v in params.itervalues()]):
             return (jsonify(error=True), 300, [])
 
         params.update(optional_params)

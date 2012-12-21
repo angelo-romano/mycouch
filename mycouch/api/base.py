@@ -1,4 +1,6 @@
-from flask.ext.restless import APIManager
+"""
+API configuration module.
+"""
 
 
 def register_this(
@@ -23,6 +25,8 @@ def register_api(app):
         ('current_user', 'CurrentUserHandler'),
         ('locations', 'LocationHandler'),
         ('locations', 'LocationByIDHandler'),
+        ('activities', 'ActivityHandler'),
+        ('activities', 'ActivityByIDHandler'),
     )
     for handler_path, handler_name in HANDLER_LIST:
         handler_module = getattr(__import__(

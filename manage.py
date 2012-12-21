@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
-from flask.ext.script import Command, Manager, Shell
+from flask.ext.script import Command, Manager, Shell, Option
 
-from mycouch import app
+from mycouch import app, models
+from mycouch.core.serializers import json_loads
+from mycouch.tests import fixtures
 
 manager = Manager(app)
 
@@ -16,6 +18,25 @@ class SyncDB(Command):
         db.drop_all()
         db.create_all()
         db.session.commit()
+
+
+class ExportFixtures(Command):
+    option_list = [
+        Option('model', action='store', default=''),
+        Option('-f', action='store', default='', dest='filters'),
+    ]
+
+    def run(self, model=None, filters=None):
+        """
+        Export fixtures.
+        """
+        if model:
+            filters_dict = json_loads(filters) if filters else None
+            model_class = getattr(models, model)
+            resp = fixtures.export_fixture(model_class, filters=filters_dict)
+        else:
+            resp = fixtures.export_all_fixtures()
+        print resp
 
 
 class FixedShell(Shell):
@@ -52,4 +73,5 @@ class Test(Command):
 manager._commands['shell'] = FixedShell()
 manager.add_command('syncdb', SyncDB())
 manager.add_command('test', Test())
+manager.add_command('export_fixtures', ExportFixtures())
 manager.run()
