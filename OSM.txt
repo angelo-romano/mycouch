@@ -1,0 +1,4 @@
+http://wiki.openstreetmap.org/wiki/Place
+http://wiki.openstreetmap.org/wiki/Admin_level
+place = city, town, village, hamlet
+place = suburb, neighbourhood
