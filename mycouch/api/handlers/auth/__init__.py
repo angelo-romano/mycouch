@@ -16,7 +16,8 @@ class AuthHandler(MethodView):
         user = User.query.filter_by(username=username).first()
         if not user:
             return ('', 401, [])
-        if user.authenticate(password):
+        resp = user.authenticate(password)
+        if resp:
             return UserByIDHandler._get(user)
         return ('', 401, [])
 

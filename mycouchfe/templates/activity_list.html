@@ -1,0 +1,13 @@
+{% extends "bootstrap_responsive.html" %}
+{% import "bootstrap_wtf.html" as wtf %}
+{% block body_content %}
+<div class="container">
+{% if not activities %}
+No activity found!
+{% else %}
+{% for activity in activities %}
+<p>{{ activity }}</p>
+{% endfor %}
+{% endif %}
+</div>
+{% endblock %}

@@ -1,7 +1,6 @@
 from flask.views import MethodView
-from flaskext.auth import login_required
 from mycouch.api.handlers.users import UserByIDHandler
-from mycouch.models import User
+from mycouch.api.utils import get_logged_user, login_required
 
 
 class CurrentUserHandler(MethodView):
@@ -10,10 +9,10 @@ class CurrentUserHandler(MethodView):
 
     @login_required()
     def get(self):
-        user = User.load_current_user()
+        user = get_logged_user()
         return UserByIDHandler._get(user)
 
     @login_required()
     def patch(self):
-        user = User.load_current_user()
+        user = get_logged_user()
         return UserByIDHandler._patch(user)

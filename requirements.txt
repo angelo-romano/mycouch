@@ -1,13 +1,14 @@
 fabric
-fixture
 Flask
+Flask-Auth
 Flask-Babel
+Flask-Bootstrap
 Flask-OAuth
-~/virtualenvs/flask-restless2/ # Flask-Restless
 Flask-Script
 Flask-SQLAlchemy
 Flask-WTF
 geoalchemy
 jsonpickle
 psycopg2
+requests
 simplejson

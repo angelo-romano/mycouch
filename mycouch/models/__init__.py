@@ -178,6 +178,10 @@ class FriendshipConnection(db.Model, ConnectionMixin, AutoInitMixin):
     """
     __tablename__ = 'connection_friendship'
 
+    def serializer_func(self, user):
+        resp = self.serialized
+        return resp
+
 
 class Reference(db.Model, ConnectionMixin, AutoInitMixin):
     """
@@ -185,3 +189,6 @@ class Reference(db.Model, ConnectionMixin, AutoInitMixin):
     """
     __tablename__ = 'connection_reference'
 
+    def serializer_func(self, user):
+        resp = self.serialized
+        return resp

@@ -27,6 +27,8 @@ def register_api(app):
         ('locations', 'LocationByIDHandler'),
         ('activities', 'ActivityHandler'),
         ('activities', 'ActivityByIDHandler'),
+        ('connections', 'ConnectionHandler'),
+        ('connections', 'ConnectionByIDHandler'),
     )
     for handler_path, handler_name in HANDLER_LIST:
         handler_module = getattr(__import__(

@@ -1,8 +1,8 @@
-from flask import request, url_for
+from flask import request, url_for, g
 from flask.views import MethodView
-from flaskext.auth import login_required
 from mycouch import app, db
-from mycouch.api.utils import jsonify
+from mycouch.api.utils import (
+    jsonify, get_logged_user, login_required, get_request_token)
 from mycouch.models import User
 from functools import wraps
 
@@ -10,7 +10,7 @@ from functools import wraps
 def only_this_user(fn):
     @wraps(fn)
     def fn2(cls, user, *args, **kwargs):
-        logged_user = User.load_current_user()
+        logged_user = get_logged_user()
         if user.id != logged_user.id:
             return ('', 401, [])
         else:
@@ -48,10 +48,9 @@ class UserHandler(MethodView):
             return (jsonify(error=True), 400, [])
 
         params.update(optional_params)
-        print params
         user = User(**params)
         user.save(commit=True)
-        return jsonify(user.serialized)
+        return UserByIDHandler._get(user)
 
 
 class UserByIDHandler(MethodView):
@@ -62,7 +61,14 @@ class UserByIDHandler(MethodView):
     @user_by_id
     @only_this_user
     def _get(cls, user):
-        return jsonify(user.serialized)
+        expand_rels = request.args.get('expand')
+        if expand_rels:
+            expand_rels = filter(lambda o: o.lower().strip(),
+                                 expand_rels.split(','))
+            user.force_serialize(expand_rels)
+        resp = user.serialized
+        resp['token'] = get_request_token()
+        return jsonify(resp)
 
     @classmethod
     @user_by_id

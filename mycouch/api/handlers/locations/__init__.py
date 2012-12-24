@@ -1,19 +1,38 @@
 from flask import request
 from flask.views import MethodView
-from flaskext.auth import login_required
 from geoalchemy import WKTSpatialElement
-from mycouch.api.utils import jsonify
-from mycouch.models import City
+from mycouch.api.utils import jsonify, login_required, get_logged_user
+from mycouch.models import City, MinorLocation
+from sqlalchemy import func
 
 
 LOCATION_TYPE_MAPPING = {
-    'city': City,
+    'cities': City,
+    'minor_locations': MinorLocation,
 }
 
 
 class LocationHandler(MethodView):
     __base_uri__ = '/locations/<loctype>'
     __resource_name__ = 'locations'
+
+    def get(self, loctype):
+        logged_user = get_logged_user()
+        if loctype not in LOCATION_TYPE_MAPPING:
+            return ('TYPE', '400', [])
+        location_class = LOCATION_TYPE_MAPPING[loctype]
+        loc_query = location_class.query
+        if logged_user:
+            make_point = lambda c: func.ST_SetSRID(
+                func.ST_Point(c.x, c.y), 4326)
+            loc_query = loc_query.filter(
+                func.ST_Distance_Sphere(
+                    make_point(location_class.coordinates),
+                    make_point(logged_user.city.coordinates)) < 100000)
+        loc_query = loc_query.order_by('-rating').limit(10)
+        resp = [o.serialized for o in loc_query]
+        return jsonify(resp)
+
 
     @login_required()
     def post(self, loctype):
@@ -47,14 +66,18 @@ class LocationHandler(MethodView):
 
         location = location_class(**params)
         location.save(commit=True)
-        resp = location.serialized
-        resp['type'] = loctype
-        return jsonify(resp)
+        return LocationByIDHandler._get(loctype, location)
 
 
 class LocationByIDHandler(MethodView):
     __base_uri__ = '/locations/<loctype>/<int:id>'
     __resource_name__ = 'locations_one'
+
+    @classmethod
+    def _get(cls, loctype, location):
+        resp = location.serialized
+        resp['type'] = loctype
+        return jsonify(resp)
 
     def get(self, loctype, id):
         if loctype not in LOCATION_TYPE_MAPPING:
@@ -65,6 +88,4 @@ class LocationByIDHandler(MethodView):
         if not location:
             return ('NOT FOUND', 404, [])
 
-        resp = location.serialized
-        resp['type'] = loctype
-        return jsonify(resp)
+        return self._get(loctype, location)

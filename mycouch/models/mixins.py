@@ -5,7 +5,7 @@ from datetime import datetime
 from geoalchemy import GeometryColumn, Point, WKTSpatialElement
 from sqlalchemy import (
     Column, Integer, Unicode, UnicodeText, DateTime, Float, ForeignKey)
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, remote, foreign
 from mycouch import db
 from mycouch.core.auth_sa import get_user_class
 from mycouch.core.db_types import JSONType
@@ -53,6 +53,14 @@ class AutoInitMixin(object):
                         val = WKTSpatialElement('POINT(%s)' % ' '.join(val))
                     setattr(self, attr, val)
 
+    def force_serialize(self, fields):
+        if fields:
+            fields_to_add = (list(fields)
+                             if isinstance(fields, (list, set, frozenset, tuple))
+                             else [fields])
+            self.__force_serialize__ = tuple(
+                list(self.__force_serialize__) + fields_to_add)
+
     @property
     def serialized(self):
         resp = {}
@@ -97,7 +105,7 @@ class MessagingMixin(object):
     reply_to_id = declared_attr(lambda self: Column(
         Integer, ForeignKey('%s.id' % self.__tablename__), nullable=True))
     reply_to = declared_attr(lambda self: relationship(
-        self, remote_side=self.id,
+        self,
         primaryjoin='remote({0}.c.id)==foreign({0}.c.reply_to_id)'.format(
             self.__tablename__)))
 
@@ -119,13 +127,13 @@ class ConnectionMixin(object):
         Integer, ForeignKey('auth_user.id'), nullable=True))
     user_from = declared_attr(lambda self: relationship(
         'User',
-        primaryjoin='foreign(%s.c.user_from_id)==auth_user.c.reply_from_id' %
+        primaryjoin='foreign(%s.c.user_from_id)==auth_user.c.id' %
             self.__tablename__))
     user_to_id = declared_attr(lambda self: Column(
         Integer, ForeignKey('auth_user.id'), nullable=True))
     user_to = declared_attr(lambda self: relationship(
         'User',
-        primaryjoin='foreign(%s.c.user_to_id)==auth_user.c.reply_to_id' %
+        primaryjoin='foreign(%s.c.user_to_id)==auth_user.c.id' %
             self.__tablename__))
 
     sent_on = declared_attr(lambda self: Column(

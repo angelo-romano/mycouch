@@ -1,9 +1,8 @@
 from flask import request
 from flask.views import MethodView
-from flaskext.auth import login_required
-from mycouch.api.utils import jsonify
+from mycouch.api.utils import jsonify, get_logged_user, login_required
 from mycouch.core.utils import datetime_from_json
-from mycouch.models import Activity, User
+from mycouch.models import Activity
 from functools import wraps
 
 
@@ -26,7 +25,7 @@ class ActivityHandler(MethodView):
 
     @login_required()
     def post(self):
-        logged_user = User.load_current_user()
+        logged_user = get_logged_user()
         params = dict(
             title=request.json.get('title'),
             description=request.json.get('description'),
