@@ -1,6 +1,7 @@
 from flask.views import MethodView
+from mycouch.api.auth import login_required
+from mycouch.api.utils import get_logged_user
 from mycouch.api.handlers.users import UserByIDHandler
-from mycouch.api.utils import get_logged_user, login_required
 
 
 class CurrentUserHandler(MethodView):

@@ -1,7 +1,13 @@
 from datetime import datetime
 from flask.ext.wtf import (
     Form, PasswordField, TextField, TextAreaField, DateTimeField, SelectField,
-    ValidationError, Length, Required)
+    IntegerField,
+    ValidationError, Length, Required, Email, EqualTo)
+
+
+def serialize_datetime(dt_val):
+    return dt_val.strftime('%Y-%m-%dT%H:%M:%S')
+
 
 # Validators
 
@@ -24,7 +30,6 @@ class GreaterThan(object):
     def __call__(self, form, field):
         val1 = getattr(form, self.fieldname, None).data
         val2 = field.data
-        print 'a1', val1, val2
         if val1 is None or val2 <= val1:
             raise ValidationError('This value must be greater than `%s`.' %
                 self.fieldname)
@@ -40,6 +45,23 @@ class LoginForm(Form):
 
     def validate(self):
         return super(LoginForm, self).validate() or self.force_error
+
+
+class NewUserForm(Form):
+    username = TextField('Username', description='The username.',
+                         validators=[Required()])
+    password = PasswordField('Password', description='The password.',
+                             validators=[Required()])
+    confirm_password = PasswordField('Confirm password', description='The password (again).',
+                                     validators=[Required(), EqualTo('password')])
+    first_name = TextField('First name', description='The first name.',
+                           validators=[Required()])
+    last_name = TextField('Last name', description='The last name.',
+                          validators=[Required()])
+    email = TextField('E-mail', description='The e-mail address.',
+                       validators=[Required(), Email()])
+    city_id = IntegerField('City ID', description='The city.',
+                           validators=[Required()])
 
 
 class NewActivityForm(Form):
@@ -59,3 +81,13 @@ class NewActivityForm(Form):
                          validators=[Required(), Length(max=64)])
     locality_id = SelectField('Locality', description='The locality.',
                               validators=[Required()])
+
+    def get_request_data(self):
+        return {
+            'title': self.title.data,
+            'description': self.description.data,
+            'scheduled_from': serialize_datetime(self.scheduled_from.data),
+            'scheduled_until': serialize_datetime(self.scheduled_until.data),
+            'location': self.location.data,
+            'locality_id': long(self.locality_id.data),
+        }

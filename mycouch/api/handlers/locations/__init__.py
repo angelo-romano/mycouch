@@ -1,7 +1,8 @@
 from flask import request
 from flask.views import MethodView
 from geoalchemy import WKTSpatialElement
-from mycouch.api.utils import jsonify, login_required, get_logged_user
+from mycouch.api.auth import login_required
+from mycouch.api.utils import jsonify, get_logged_user
 from mycouch.models import City, MinorLocation
 from sqlalchemy import func
 
@@ -32,7 +33,6 @@ class LocationHandler(MethodView):
         loc_query = loc_query.order_by('-rating').limit(10)
         resp = [o.serialized for o in loc_query]
         return jsonify(resp)
-
 
     @login_required()
     def post(self, loctype):

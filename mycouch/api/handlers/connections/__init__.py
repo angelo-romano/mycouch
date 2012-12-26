@@ -1,7 +1,7 @@
 from flask import request
 from flask.views import MethodView
-from flaskext.auth import login_required
 from geoalchemy import WKTSpatialElement
+from mycouch.api.auth import login_required
 from mycouch.api.utils import jsonify, get_logged_user
 from mycouch.models import City, Reference, FriendshipConnection
 from sqlalchemy import or_

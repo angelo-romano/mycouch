@@ -8,7 +8,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship, remote, foreign
 from mycouch import db
 from mycouch.core.auth_sa import get_user_class
-from mycouch.core.db_types import JSONType
+from mycouch.core.db_types import JSONType, StateType
 from mycouch.core.utils import get_country_name, serialize_db_value
 
 
@@ -84,6 +84,16 @@ class AutoInitMixin(object):
     def commit(self):
         return db.session.commit()
 
+    def populate_from_json(self, json_dict):
+        cols = inspect(self.__class__).columns
+        for (key, val) in json_dict.iteritems():
+            #col_type = cols[key].type
+            if isinstance(val, dict) and '_geo' in val:
+                v = tuple(val['_geo'])
+                setattr(self, key, 'POINT(%s %s)' % v)
+            else:
+                setattr(self, key, val)
+
 
 class MessagingMixin(object):
     """
@@ -98,14 +108,16 @@ class MessagingMixin(object):
     type = declared_attr(lambda self: Column(Unicode(24), nullable=False))
     sent_on = declared_attr(lambda self: Column(
         DateTime, nullable=False, default=datetime.utcnow))
-    flags = declared_attr(lambda self: Column(JSONType, nullable=False))
+    flags = declared_attr(lambda self: Column(JSONType, nullable=True))
     sender_id = declared_attr(lambda self: Column(
         Integer, ForeignKey('auth_user.id'), nullable=False))
-    sender = declared_attr(lambda self: relationship('User'))
+    sender = declared_attr(lambda self: relationship(
+        'User', single_parent=True, cascade='all, delete'))
     reply_to_id = declared_attr(lambda self: Column(
         Integer, ForeignKey('%s.id' % self.__tablename__), nullable=True))
     reply_to = declared_attr(lambda self: relationship(
-        self,
+        self, cascade='all, delete',
+        single_parent=True,
         primaryjoin='remote({0}.c.id)==foreign({0}.c.reply_to_id)'.format(
             self.__tablename__)))
 
@@ -126,13 +138,15 @@ class ConnectionMixin(object):
     user_from_id = declared_attr(lambda self: Column(
         Integer, ForeignKey('auth_user.id'), nullable=True))
     user_from = declared_attr(lambda self: relationship(
-        'User',
+        'User', cascade='all, delete',
+        single_parent=True,
         primaryjoin='foreign(%s.c.user_from_id)==auth_user.c.id' %
             self.__tablename__))
     user_to_id = declared_attr(lambda self: Column(
         Integer, ForeignKey('auth_user.id'), nullable=True))
     user_to = declared_attr(lambda self: relationship(
-        'User',
+        'User', cascade='all, delete',
+        single_parent=True,
         primaryjoin='foreign(%s.c.user_to_id)==auth_user.c.id' %
             self.__tablename__))
 
@@ -140,7 +154,8 @@ class ConnectionMixin(object):
         DateTime, nullable=False, default=datetime.utcnow))
 
     type = declared_attr(lambda self: Column(Unicode(24), nullable=False))
-    type_status = declared_attr(lambda self: Column(Unicode(24), nullable=False))
+    type_status = declared_attr(lambda self: Column(
+        StateType(transitions=self.__state_transitions__), nullable=False))
 
     flags = declared_attr(lambda self: Column(JSONType, nullable=False))
 
@@ -152,15 +167,25 @@ class MessagingNotificationMixin(object):
     id = declared_attr(lambda self: Column(Integer, primary_key=True))
     user_id = declared_attr(lambda self: Column(
         Integer, ForeignKey('auth_user.id'), nullable=False))
-    user = declared_attr(lambda self: relationship('User'))
+    user = declared_attr(lambda self: relationship(
+        'User', single_parent=True, cascade='all, delete'))
     message_id = declared_attr(lambda self: Column(
         Integer, ForeignKey(self.__message_class__.id), nullable=False))
-    message = declared_attr(lambda self: relationship(self.__message_class__))
+    message = declared_attr(lambda self: relationship(
+        self.__message_class__, single_parent=True, cascade='all, delete'))
     status = declared_attr(lambda self: Column(
-        Unicode(24), nullable=False, default='unread'))
+        StateType(transitions=self.__state_transitions__), nullable=False, default='unread'))
+
+    @declared_attr
+    def __state_transitions__(self):
+        return {
+            'unread': ['read', 'deleted', 'archived'],
+            'read': ['deleted', 'archived'],
+            'archived': ['deleted'],
+        }
 
 
-class LocationMixin(object):
+class LocalityMixin(object):
     """
     The location mixin.
     """

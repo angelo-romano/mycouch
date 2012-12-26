@@ -1,6 +1,6 @@
 from flask import request
 from flask.views import MethodView
-from flaskext.auth import logout
+from mycouch.api.auth import logout
 from mycouch.api.handlers.users import UserByIDHandler
 from mycouch.api.utils import jsonify
 from mycouch.models import User

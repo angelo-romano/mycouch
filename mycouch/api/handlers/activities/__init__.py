@@ -1,6 +1,7 @@
 from flask import request
 from flask.views import MethodView
-from mycouch.api.utils import jsonify, get_logged_user, login_required
+from mycouch.api.auth import login_required
+from mycouch.api.utils import jsonify, get_logged_user
 from mycouch.core.utils import datetime_from_json
 from mycouch.models import Activity
 from functools import wraps

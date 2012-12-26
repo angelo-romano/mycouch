@@ -1,12 +1,5 @@
-{% extends "bootstrap_responsive.html" %}
+{% extends "base.html" %}
 {% import "bootstrap_wtf.html" as wtf %}
-{% block body_content %}
-<div class="container">
-{% if user %}
-<p>Welcome {{ user.username }}!</p>
-<p><a href="/myprofile">Your profile</a> | <a href="/logout">Logout</a></p>
-{% else %}
-<p><a href="/register">Register</a> | <a href="/login">Log in</a></p>
-{% endif %}
-</div>
+{% block body_container %}
+{{ super() }}
 {% endblock %}

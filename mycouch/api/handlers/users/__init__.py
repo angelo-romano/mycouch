@@ -1,8 +1,8 @@
-from flask import request, url_for, g
+from flask import request
 from flask.views import MethodView
-from mycouch import app, db
-from mycouch.api.utils import (
-    jsonify, get_logged_user, login_required, get_request_token)
+from mycouch import db
+from mycouch.api.auth import login_required, get_request_token
+from mycouch.api.utils import jsonify, get_logged_user
 from mycouch.models import User
 from functools import wraps
 
