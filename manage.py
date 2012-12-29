@@ -20,6 +20,18 @@ class SyncDB(Command):
         db.session.commit()
 
 
+class ImportFixtures(Command):
+    option_list = [
+        Option('file', action='store'),
+    ]
+
+    def run(self, file=None):
+        """
+        Export fixtures.
+        """
+        resp = fixtures.import_fixtures_from_files([file])
+
+
 class ExportFixtures(Command):
     option_list = [
         Option('model', action='store', default=''),
@@ -74,4 +86,5 @@ manager._commands['shell'] = FixedShell()
 manager.add_command('syncdb', SyncDB())
 manager.add_command('test', Test())
 manager.add_command('export_fixtures', ExportFixtures())
+manager.add_command('import_fixtures', ImportFixtures())
 manager.run()

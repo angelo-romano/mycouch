@@ -1,24 +1,31 @@
-from datetime import datetime
-from mycouch import db
+from datetime import datetime, date
 from geoalchemy import (
     GeometryDDL, GeometryColumn, Point)
 
 from sqlalchemy import (
-    Column, Integer, Unicode, UnicodeText, DateTime,
+    Column, Integer, Unicode, UnicodeText, Date, DateTime, Boolean, Enum,
     UniqueConstraint, ForeignKey)
 
 #from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship, backref
-
-from mycouch.core.db_types import JSONType, StateType
 from mycouch.core.auth_sa import get_user_class
-from mycouch.core.utils import slugify
+from mycouch.core.db import Base
+from mycouch.core.db.types import JSONType, StateType, SlugType
+from mycouch.core.utils import serialize_db_value
 from mycouch.models.mixins import (
     AutoInitMixin, LocalityMixin, MessagingMixin,
     MessagingNotificationMixin, ConnectionMixin)
 
 
-AuthUserBase = get_user_class(db.Model)
+AuthUserBase = get_user_class(Base)
+
+
+GENDER_CHOICES = {  # ISO/IEC 5218
+    '0': u'Not known',
+    '1': u'Female',
+    '2': u'Male',
+    '9': u'Not applicable',
+}
 
 
 class User(AuthUserBase, AutoInitMixin):
@@ -29,17 +36,23 @@ class User(AuthUserBase, AutoInitMixin):
     __do_not_serialize__ = (
         'password', 'salt', 'role', 'modified', 'city')
     __force_serialize__ = (
-        'country', 'country_code')
+        'country', 'country_code', 'details', 'age')
 
     id = Column(Integer, primary_key=True)
 
     first_name = Column(Unicode(64), nullable=True)
     last_name = Column(Unicode(64), nullable=True)
     email = Column(Unicode(64), nullable=False)
-    city_id = Column(Integer, ForeignKey('geo_city.id'), nullable=True)
-    websites = Column(JSONType, nullable=True)
+    gender = Column(Enum(*GENDER_CHOICES.keys(), name='gender_enum'),
+                    nullable=False)
+    birth_date = Column(Date, nullable=False)
 
+    city_id = Column(Integer, ForeignKey('geo_city.id'), nullable=True)
     city = relationship('City')
+
+    @property
+    def gender_description(self):
+        return GENDER_CHOICES[self.gender]
 
     @property
     def country_code(self):
@@ -49,8 +62,42 @@ class User(AuthUserBase, AutoInitMixin):
     def country(self):
         return self.city.country if self.city else None
 
+    @property
+    def age(self):
+        today = date.today()
 
-class City(db.Model, LocalityMixin, AutoInitMixin):
+        try:
+            # raised when birth date is February 29
+            # and the current year is not a leap year
+            birthday = self.birth_date.replace(year=today.year)
+        except ValueError:
+            birthday = self.birth_date.replace(
+                year=today.year, day=self.birth_date.day - 1)
+
+        if birthday > today:
+            return today.year - self.birth_date.year - 1
+        else:
+            return today.year - self.birth_date.year
+
+
+class UserProfileDetails(Base, AutoInitMixin):
+    """
+    User profile details for a specific account.
+    """
+    __tablename__ = 'auth_userprofiledetails'
+    __do_not_serialize__ = (
+        'id', 'user_id')
+
+    id = Column(Integer, primary_key=True)
+    websites = Column(JSONType, nullable=True)
+    sections = Column(JSONType, nullable=True)
+    profile_details = Column(JSONType, nullable=True)
+
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    user = relationship(User, backref=backref('details', uselist=False))
+
+
+class City(Base, LocalityMixin, AutoInitMixin):
     """
     Main city model.
     """
@@ -64,7 +111,7 @@ UniqueConstraint(City.slug, City.country_code)
 GeometryDDL(City.__table__)
 
 
-class MinorLocality(db.Model, LocalityMixin, AutoInitMixin):
+class MinorLocality(Base, LocalityMixin, AutoInitMixin):
     """
     Model representing a "minor locality" (not an official city).
     """
@@ -81,7 +128,7 @@ class MinorLocality(db.Model, LocalityMixin, AutoInitMixin):
 GeometryDDL(MinorLocality.__table__)
 
 
-class Activity(db.Model, AutoInitMixin):
+class Activity(Base, AutoInitMixin):
     """
     The activity model.
     """
@@ -133,7 +180,7 @@ class Activity(db.Model, AutoInitMixin):
 GeometryDDL(Activity.__table__)
 
 
-class ActivityRSVP(db.Model, AutoInitMixin):
+class ActivityRSVP(Base, AutoInitMixin):
     """
     The activity RSVP model.
     """
@@ -144,27 +191,37 @@ class ActivityRSVP(db.Model, AutoInitMixin):
     RSVP_STATUSES = frozenset(['yes', 'no', 'maybe'])
 
     id = Column(Integer, primary_key=True)
+
     activity_id = Column(Integer, ForeignKey(Activity.id), nullable=False)
+    activity = relationship(Activity)
+
     user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    user = relationship(User)
 
     rsvp_status = Column(Unicode(16), nullable=False, index=True)
     comment = Column(Unicode(90), nullable=True)
 
-    activity = relationship(Activity)
-    user = relationship(User)
 
 # (user, activity) are unique as a couple - a user can RSVP only once
 UniqueConstraint(ActivityRSVP.user_id, ActivityRSVP.activity_id)
 
 
-class PrivateMessage(db.Model, MessagingMixin, AutoInitMixin):
+class PrivateMessage(Base, MessagingMixin, AutoInitMixin):
     """
     The private message model.
     """
     __tablename__ = 'message_privatemessage'
 
+    @property
+    def __notification_class__(self):
+        return PrivateMessageNotification
 
-class PrivateMessageNotification(db.Model, MessagingNotificationMixin,
+    __mapper_args__ = {
+        'polymorphic_on': 'type',
+        'polymorphic_identity': 'private_message'}
+
+
+class PrivateMessageNotification(Base, MessagingNotificationMixin,
                                  AutoInitMixin):
     """
     The private message notification model.
@@ -173,21 +230,38 @@ class PrivateMessageNotification(db.Model, MessagingNotificationMixin,
     __message_class__ = PrivateMessage
 
 
-class HospitalityRequest(db.Model, MessagingMixin, AutoInitMixin):
+class HospitalityRequest(Base, MessagingMixin, AutoInitMixin):
     """
     The hospitality request model.
     """
     __tablename__ = 'message_hospitalityrequest'
     __state_transitions__ = {
-        'unread': ['accepted', 'refused', 'maybe'],
-        'accepted': ['refused', 'maybe'],
-        'maybe': ['accepted', 'refused'],
+        'unread': ['accepted', 'refused', 'maybe', 'canceled'],
+        'accepted': ['refused', 'maybe', 'canceled'],
+        'maybe': ['accepted', 'refused', 'canceled'],
+        'canceled': ['accepted', 'maybe'],
     }
+
+    @property
+    def __notification_class__(self):
+        return HospitalityRequestNotification
+
     status = Column(StateType(transitions=__state_transitions__),
                     default='unread', nullable=False)
 
+    def change_status(self, new_status):
+        if (self.__state_transitions__ and
+                new_status not in self.__state_transitions__[self.status]):
+            raise ValueError('Invalid state transition.')
+        self.status = new_status
+        self.save()
 
-class HospitalityRequestNotification(db.Model, MessagingNotificationMixin,
+    __mapper_args__ = {
+        'polymorphic_on': 'type',
+        'polymorphic_identity': 'hospitality_request'}
+
+
+class HospitalityRequestNotification(Base, MessagingNotificationMixin,
                                      AutoInitMixin):
     """
     The hospitality request notification model.
@@ -196,7 +270,7 @@ class HospitalityRequestNotification(db.Model, MessagingNotificationMixin,
     __message_class__ = HospitalityRequest
 
 
-class FriendshipConnection(db.Model, ConnectionMixin, AutoInitMixin):
+class FriendshipConnection(Base, ConnectionMixin, AutoInitMixin):
     """
     The friendship connection model.
     """
@@ -206,12 +280,44 @@ class FriendshipConnection(db.Model, ConnectionMixin, AutoInitMixin):
         'accepted': ['removed'],
     }
 
+    __do_not_serialize__ = (
+        'user_from_id', 'user_to_id')
+
+    FRIENDSHIP_LEVEL_CHOICES = {
+        'acquaintance': 'Acquaintance',
+        'friend': 'Friend',
+        'relative': 'Relative',
+        'partner': 'Partner',
+        'good_friend': 'Good friend',
+        'best_friend': 'Best friend',
+    }
+
+    friendship_level = Column(
+        Enum(*FRIENDSHIP_LEVEL_CHOICES.keys(), name='friendship_level_enum'),
+        default='friend', nullable=False)
+
+    @classmethod
+    def validate_friendship_level(cls, level):
+        return (level in cls.FRIENDSHIP_LEVEL_CHOICES)
+
+    @property
+    def friendship_level_description(self):
+        return self.FRIENDSHIP_LEVEL_CHOICES.get(self.friendship_level)
+
     def serializer_func(self, user):
         resp = self.serialized
+        resp['user_id'] = serialize_db_value(
+            self.user_from_id
+            if self.user_to_id == user.id else self.user_to_id)
+
         return resp
 
+    __mapper_args__ = {
+        'polymorphic_on': 'type',
+        'polymorphic_identity': 'friendship'}
 
-class Reference(db.Model, ConnectionMixin, AutoInitMixin):
+
+class Reference(Base, ConnectionMixin, AutoInitMixin):
     """
     The reference model.
     """
@@ -222,22 +328,46 @@ class Reference(db.Model, ConnectionMixin, AutoInitMixin):
         'negative': [],
     }
 
+    __do_not_serialize__ = (
+        'user_from_id', 'user_to_id', 'type_status', 'description')
+
+    @classmethod
+    def validate_reference_type(cls, reftype):
+        return (reftype in cls.__state_transitions__)
+
     def serializer_func(self, user):
         resp = self.serialized
+        update_dict = (
+            ('user_id', (self.user_from_id
+                         if self.user_to_id == user.id else self.user_to_id)),
+            ('reference_type', self.type_status))
+
+        resp.update(dict((k, serialize_db_value(v))
+                         for (k, v) in update_dict))
         return resp
 
+    __mapper_args__ = {
+        'polymorphic_on': 'type',
+        'polymorphic_identity': 'reference'}
 
-class Group(db.Model, AutoInitMixin):
+
+class Group(Base, AutoInitMixin):
     """
     The group model.
     """
     __tablename__ = 'group_group'
 
     id = Column(Integer, primary_key=True)
-    slug = Column(Unicode(64), nullable=False, unique=True)
+    slug = Column(SlugType(field='title'), nullable=False, unique=True)
+
+    creator_id = Column(Integer, ForeignKey(User.id), nullable=True)
+    creator = relationship(User)
 
     parent_group_id = Column(Integer, ForeignKey(id), nullable=True)
-    parent_group = relationship(Group)
+    parent_group = relationship(
+        'Group',
+        primaryjoin='remote({0}.c.id)==foreign({0}.c.parent_group_id)'.format(
+            __tablename__))
 
     title = Column(Unicode(64), nullable=False)
     description = Column(UnicodeText, nullable=True)
@@ -250,14 +380,15 @@ class Group(db.Model, AutoInitMixin):
 
     root_group_posts = relationship(
         'GroupPost',
-        primaryjoin=and_('Group.id==GroupPost.group_id',
-                         'GroupPost.reply_to_id==None'))
+        primaryjoin=(
+            'and_(Group.id==GroupPost.group_id,'
+            'GroupPost.reply_to_id==None)'))
 
 # (slug, country_code) are unique as a couple
 UniqueConstraint(Group.title, Group.parent_group_id)
 
 
-class GroupPost(db.Model, MessagingMixin, AutoInitMixin):
+class GroupPost(Base, MessagingMixin, AutoInitMixin):
     """
     The group post model.
     """

@@ -11,9 +11,13 @@ class CurrentUserHandler(MethodView):
     @login_required()
     def get(self):
         user = get_logged_user()
+        if not user:
+            return ('NOT AUTHENTICATED', 401, [])
         return UserByIDHandler._get(user)
 
     @login_required()
     def patch(self):
         user = get_logged_user()
+        if not user:
+            return ('NOT AUTHENTICATED', 401, [])
         return UserByIDHandler._patch(user)

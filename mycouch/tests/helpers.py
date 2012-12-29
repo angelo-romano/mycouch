@@ -11,6 +11,7 @@ sys.path.append(cur_dir)
 
 from flask.ext.sqlalchemy import SQLAlchemy
 from mycouch import app, db
+from mycouch.core.serializers import json_loads, json_dumps
 import psycopg2
 
 
@@ -36,7 +37,6 @@ def setup_database():
     for this_command in commands:
         this_command = this_command % DATABASE_CONFIG
         this_command = this_command.split(' ')
-        print this_command
         subprocess.call(this_command)
 
 
@@ -53,3 +53,24 @@ def prepare_database():
     cur.execute('CREATE DATABASE %s TEMPLATE mycouch_template;'
         % DATABASE_CONFIG['dbname'])
     db_conn.close()
+
+
+def auth_user(app, username, password):
+    data = {'username': username,
+            'password': password}
+    resp = send_call(app, 'post', '/auth', data)
+    if resp.status_code == 200:
+        return json_loads(resp.data)
+
+
+def send_call(app, method, url, params=None, token=None):
+    kwargs = {
+        'content_type': 'application/json',
+        'headers': {'Authorization': (
+            'MYC apikey="whatever"%s' % (
+                ', token="%s"' % token if token else ''))},
+    }
+    if params:
+        kwargs['data'] = (params if isinstance(params, basestring)
+                          else json_dumps(params))
+    return getattr(app, method)(url, **kwargs)

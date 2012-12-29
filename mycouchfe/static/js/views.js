@@ -15,33 +15,37 @@ function serializeJSON(form) {
     return JSON.stringify(dic);
 }
 
-AuthView = Backbone.View.extend({
+FormView = Backbone.View.extend({
     tagName: "form",
     events: {
-        "submit": "authenticate"
+        "submit": "post"
     },
-    initialize: function() {
-        //_.bindAll(this, 'render');
+    setURL: function(postURL, retURL) {
+        this.postURL = '/ajax' + postURL;
+        this.retURL = retURL;
+        console.log(this.postURL);
     },
-    render: function() {
-        console.get('rendered');
-    },
-    authenticate: function(event) {
-        $.ajax('/ajax/login', {
+    post: function(event) {
+        var postURL = '/ajax' + this.options.postURL;
+        $.ajax(postURL, {
            data: serializeJSON(this.$el),
+           retURL: this.options.retURL,
            type: 'POST',
            contentType: 'application/json',
            cache: false,
            success: function(data, textStatus, jqXHR) {
-               if (data.error_list) {
+               if (data.error_list && data.error_list.length > 0) {
                    showErrors(data.error_list);
                    return false;
                }
-               location.reload();
+               if (this.retURL) {
+                   location.href = this.retURL;
+               } else {
+                   location.reload();
+               }
                return true;
            }
         });
         return false;
     }
 });
-var auth_view = new AuthView({ el: $("#login_form") });

@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, date
 from flask.ext.wtf import (
     Form, PasswordField, TextField, TextAreaField, DateTimeField, SelectField,
-    IntegerField,
+    IntegerField, DateField,
     ValidationError, Length, Required, Email, EqualTo)
 
 
@@ -11,14 +11,36 @@ def serialize_datetime(dt_val):
 
 # Validators
 
+class PastDateTime(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, form, field):
+        val = field.data
+        if isinstance(val, datetime):
+            now = datetime.now()
+        elif isinstance(val, date):
+            now = date.today()
+        else:
+            raise ValidationError('Value is not a valid date/datetime object')
+        if val and not (val < now):
+            raise ValidationError('Date/datetime not in the past.')
+
+
 class FutureDateTime(object):
     def __init__(self):
         pass
 
     def __call__(self, form, field):
         val = field.data
-        if val and val < datetime.now():
-            raise ValidationError('Date+time not in the future.')
+        if isinstance(val, datetime):
+            now = datetime.now()
+        elif isinstance(val, date):
+            now = date.today()
+        else:
+            raise ValidationError('Value is not a valid date/datetime object')
+        if val and (val < now):
+            raise ValidationError('Date/datetime not in the past.')
 
 
 class GreaterThan(object):
@@ -60,8 +82,27 @@ class NewUserForm(Form):
                           validators=[Required()])
     email = TextField('E-mail', description='The e-mail address.',
                        validators=[Required(), Email()])
+    birth_date = DateField('Date of birth', description='The date of birth.',
+                           validators=[Required(), PastDateTime()])
+    gender = SelectField('Gender', description='The gender.',
+                         validators=[Required()],
+                         choices=[
+                            ('1', 'Female'),
+                            ('2', 'Male'),
+                         ], coerce=str)
     city_id = IntegerField('City ID', description='The city.',
                            validators=[Required()])
+    def as_dict(self):
+        return {
+            'username': self.username.data,
+            'password': self.password.data,
+            'first_name': self.first_name.data,
+            'last_name': self.last_name.data,
+            'email': self.email.data,
+            'birth_date': self.birth_date.data,
+            'gender': self.gender.data,
+            'city_id': self.city_id.data,
+        }
 
 
 class NewActivityForm(Form):

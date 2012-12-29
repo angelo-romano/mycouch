@@ -1,5 +1,15 @@
 {% extends "base.html" %}
 {% import "bootstrap_wtf.html" as wtf %}
-{% block body_container %}
-{{ super() }}
+{% block hero_unit %}
+    <h1>MyCouch</h1>
+    {% if logged_user %}
+    <p>Welcome {{ logged_user.username }}!</p>
+    <p><a class="btn btn-primary btn-large">Learn more &raquo;</a></p>
+    {% else %}
+    <p>Welcome!</p>
+    <p><a class="btn btn-primary btn-large">Learn more &raquo;</a>
+    <a href="/register" class="btn btn-primary btn-large">Register &raquo;</a></p>
+
+    {% endif %}
 {% endblock %}
+

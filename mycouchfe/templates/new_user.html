@@ -1,21 +1,74 @@
-{% extends "bootstrap_responsive.html" %}
+{% extends "base.html" %}
 {% import "bootstrap_wtf.html" as wtf %}
-{% block body_content %}
+{% block hero_unit %}
 <div class="container">
-<form class="form form-horizontal" method="post">
+<form id="register_form" class="form form-horizontal">
+  <div class="errors"></div>
   {{ form.hidden_tag() }}
-  {{ wtf.form_errors(form, "only") }}
-
-  {{ wtf.horizontal_field(form.username) }}
-  {{ wtf.horizontal_field(form.password) }}
-  {{ wtf.horizontal_field(form.first_name) }}
-  {{ wtf.horizontal_field(form.last_name) }}
-  {{ wtf.horizontal_field(form.email) }}
-  {{ wtf.horizontal_field(form.city_id) }}
+  <div class="control-group">
+    <label class="control-label" for="username">Username</label>
+    <div class="controls">
+      <input id="username" name="username" type="text"></input>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label" for="password">Password</label>
+    <div class="controls">
+      <input id="password" name="password" type="password"></input>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label" for="confirm_password">Confirm password</label>
+    <div class="controls">
+      <input id="confirm_password" name="confirm_password" type="password"></input>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label" for="first_name">First name</label>
+    <div class="controls">
+      <input id="first_name" name="first_name" type="text"></input>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label" for="last_name">Last name</label>
+    <div class="controls">
+      <input id="last_name" name="last_name" type="text"></input>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label" for="gender">Gender</label>
+    <div class="controls">
+      <select id="gender" name="gender">
+      <option value="1">Female</option>
+      <option value="2">Male</option>
+      </select>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label" for="email">Email</label>
+    <div class="controls">
+      <input id="email" name="email" type="text"></input>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label" for="birth_date">Date of birth</label>
+    <div class="controls">
+      <input id="birth_date" name="birth_date" type="text"></input>
+    </div>
+  </div>
+  <div class="control-group">
+    <label class="control-label" for="city_id">City ID</label>
+    <div class="controls">
+      <input id="city_id" name="city_id" type="text"></input>
+    </div>
+  </div>
 
   <div class="form-actions">
      <button name="action_save" type="submit" class="btn btn-primary">Create</button>
   </div>
 </form>
 </div>
+{% endblock %}
+{% block js_onload %}
+var register_view = new FormView({ el: $("#register_form"), postURL: '/register'});
 {% endblock %}

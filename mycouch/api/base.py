@@ -29,6 +29,10 @@ def register_api(app):
         ('activities', 'ActivityByIDHandler'),
         ('connections', 'ConnectionHandler'),
         ('connections', 'ConnectionByIDHandler'),
+        ('groups', 'GroupHandler'),
+        ('groups', 'GroupByIDHandler'),
+        ('messages', 'MessageHandler'),
+        ('messages', 'MessageByIDHandler'),
     )
     for handler_path, handler_name in HANDLER_LIST:
         handler_module = getattr(__import__(

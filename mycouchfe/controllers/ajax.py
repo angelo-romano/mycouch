@@ -34,7 +34,7 @@ def login():
         error_list.append('Not authorized.')
     else:
         error_list.append('Unexpected error.')
-    resp['errors'] = error_list
+    resp['error_list'] = error_list
     return jsonify(resp)
 
 
@@ -48,9 +48,23 @@ def logout():
 @ajax_blueprint.route('/register', methods=('GET', 'POST'))
 def register():
     form = forms.NewUserForm()
+    error_list = []
+    resp = {}
     if form.validate_on_submit():
-        pass
-    return render_template('new_user.html', form=form)
+        reqdata = form.as_dict()
+        api = api_call('post', '/users', reqdata, request_params={'expand': 'city'})
+        if api.status_code == 200:
+            json = api.json()
+            session['token'] = json.get('token')
+        elif api.status_code == 401:
+            error_list.append('Not authorized.')
+        else:
+            error_list.append('Unexpected error.')
+    else:
+        error_list = ['%s: %s' % (k, ', '.join(v))
+                      for k, v in form.errors.iteritems()]
+    resp['error_list'] = error_list
+    return jsonify(resp)
 
 
 @ajax_blueprint.route('/myprofile', methods=('GET',))

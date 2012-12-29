@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% import "bootstrap_wtf.html" as wtf %}
+{% block hero_unit %}
+<div class="container">
+{% if not city %}
+City not found!
+{% else %}
+<div>
+<h3>City</h3>
+
+<p>{{ city.name }}, {{ city.country }}</p>
+</div>
+{% endif %}
+
+<div>
+<div id="map_canvas" style="width:100%; height:100%"></div>
+<h3>Related groups</h3>
+{% if groups %}
+{% for group in groups %}
+<p>{{ group }}</p>
+{% endfor %}
+{% else %}
+<p>No groups!</p>
+{% endif %}
+</div>
+</div>
+{% endblock %}
+{% block js_onload %}
+gmapInitialize({{ city.latitude }}, {{ city.longitude }});
+{% endblock %}

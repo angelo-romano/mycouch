@@ -62,6 +62,6 @@ def get_user_class(declarative_base):
                 return None
             return cls.query.filter(and_(
                 cls.username == data['username'],
-                cls.is_active)).one()
+                cls.is_active)).first()
 
     return User

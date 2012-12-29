@@ -2,14 +2,14 @@ from flask import request
 from flask.views import MethodView
 from geoalchemy import WKTSpatialElement
 from mycouch.api.auth import login_required
-from mycouch.api.utils import jsonify, get_logged_user
-from mycouch.models import City, MinorLocation
+from mycouch.api.utils import jsonify, get_logged_user, build_error_dict
+from mycouch.models import City, MinorLocality
 from sqlalchemy import func
 
 
 LOCATION_TYPE_MAPPING = {
     'cities': City,
-    'minor_locations': MinorLocation,
+    'minor_locations': MinorLocality,
 }
 
 
@@ -52,8 +52,12 @@ class LocationHandler(MethodView):
             slug=request.json.get('slug'),
             wikiname=request.json.get('wikiname'))
 
-        if not all([v not in (None, '') for v in params.itervalues()]):
-            return (jsonify(error=True), 300, [])
+        missing_vals = [(k, v) for (k, v) in params.iteritems()
+                        if v in (None, '')]
+        if missing_vals:
+            error_dict = build_error_dict([
+                '"%s" not specified' % k for (k, _) in missing_vals])
+            return (jsonify(error_dict), 400, [])
 
         params.update(optional_params)
 

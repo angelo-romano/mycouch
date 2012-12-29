@@ -1,12 +1,12 @@
 {% extends "bootstrap_responsive.html" %}
 {% import "bootstrap_wtf.html" as wtf %}
-{% block favicons %}
-    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="../assets/ico/apple-touch-icon-144-precomposed.png">
-    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="../assets/ico/apple-touch-icon-114-precomposed.png">
-      <link rel="apple-touch-icon-precomposed" sizes="72x72" href="../assets/ico/apple-touch-icon-72-precomposed.png">
-                    <link rel="apple-touch-icon-precomposed" href="../assets/ico/apple-touch-icon-57-precomposed.png">
-                                   <link rel="shortcut icon" href="../assets/ico/favicon.png">
-
+{% block head %}
+<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFkQBibtdyVnZ_DkIxmXCe_pOplaL0Hck&sensor=false"></script>
+{{ super() }}
+{% block style %}
+{{ super() }}
+<link href="/static/css/main.css" rel="stylesheet"></link>
+{% endblock %}
 {% endblock %}
 {% block body_content %}
     <div class="navbar navbar-inverse navbar-fixed-top">
@@ -17,7 +17,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </a>
-          <a class="brand" href="#">MyCouch</a>
+          <a class="brand" href="/">MyCouch</a>
           <div class="nav-collapse collapse">
             <ul class="nav">
               <li class="active"><a href="#">Home</a></li>
@@ -36,8 +36,8 @@
                 </ul>
               </li>
             </ul>
-            {% if user %}
-            <p class="navbar-text pull-right">Welcome {{ user.username }}!</p>
+            {% if logged_user %}
+            <p class="navbar-text pull-right">Welcome {{ logged_user.username }}!</p>
             {% else %}
             <!-- User form -->
             <form class="navbar-form pull-right" id="login_form" onsubmit="return false;">
@@ -56,30 +56,28 @@
     <div class="container-fluid">
       <div class="row-fluid">
 
-    {% block body_container %}
-    {% if user %}
+    {% if logged_user %}
         <div class="span3">
           <div class="well sidebar-nav">
             <ul class="nav nav-list">
               <li class="nav-header">You</li>
-              <li><a href="#">Your profile</a></li>
-              <li><a href="#">Your activities</a></li>
-              <li><a href="#">Your friendships</a></li>
-              <li><a href="#">Your references</a></li>
-              <li><a href="#">Log out</a></li>
+              <li><a href="/myprofile">Your profile</a></li>
+              <li><a href="/myactivities">Your activities</a></li>
+              <li><a href="/myfriends">Your friendships</a></li>
+              <li><a href="/logout">Log out</a></li>
             </ul>
           </div><!--/well-->
         </div><!--/span-->
     {% endif %}
         <div class="span9">
 
-      <div class="hero-unit">
-        <h1>MyCouch</h1>
-        <p>Welcome{% if user %} {{ user.username }}{% endif %}!</p>
-        <p><a class="btn btn-primary btn-large">Learn more &raquo;</a></p>
-      </div>
+            <div class="hero-unit">
+            {% block hero_unit %}
+            {% endblock %}
+            </div>
         </div><!--/span-->
-      </div><!--/row-->
+    </div><!--/row-->
+    {% block body_container %}
 
       <!-- Example row of columns -->
       <div class="row">
@@ -115,5 +113,15 @@
     <script src="/static/js/backbone.js"></script>
     <script src="/static/js/models.js"></script>
     <script src="/static/js/views.js"></script>
+    <script src="/static/js/gmaps.js"></script>
+    <script type="text/javascript">
+    $(function() {
+        //gmapLoadScript();
+        gmapInitialize();
+        var auth_view = new FormView({ el: $("#login_form"), postURL: '/login'});
+        {% block js_onload %}
+        {% endblock %}
+    });
+    </script>
     {% endblock %}
 {% endblock %}

@@ -4,6 +4,10 @@ import re
 from datetime import date, time, datetime
 from flaskext.babel import gettext as _
 from mycouch import db
+from unicodedata import normalize
+
+
+_punct_re = re.compile(r'[\t !"#$%&\'()*\-/<=>?@\[\\\]^_`{|},.]+')
 
 
 COUNTRY_CODE_LIST = {
@@ -64,6 +68,16 @@ COUNTRY_CODE_LIST = {
 }
 
 
+def is_state_dict(val):
+    if not isinstance(val, dict):
+        return False
+    if 'current' not in val:
+        return False
+
+    keys = [k for k in val.iterkeys() if k != 'current']
+    return all(o.isdigit() for o in keys)
+
+
 def serialize_db_value(val):
     if isinstance(val, datetime):
         return val.strftime('%Y-%m-%dT%H:%M:%S')
@@ -71,6 +85,8 @@ def serialize_db_value(val):
         return val.strftime('%Y-%m-%d')
     elif isinstance(val, time):
         return val.strftime('%H:%M:%S')
+    elif is_state_dict(val):
+        return val.get('current')
     elif hasattr(val, 'kml'):
         return (val.coords(db.session))
     return val
@@ -80,20 +96,15 @@ def datetime_from_json(val):
     return datetime.strptime(val, '%Y-%m-%dT%H:%M:%S')
 
 
-def slugify(text, separator="-"):
-    ret = ""
-    for c in text.lower():
-        try:
-            ret += htmlentitydefs.codepoint2name[ord(c)]
-        except:
-            ret += c
-
-    ret = re.sub("([a-zA-Z])(uml|acute|grave|circ|tilde|cedil)", r"\1", ret)
-    ret = re.sub("\W", " ", ret)
-    ret = re.sub(" +", separator, ret)
-
-    return ret.strip()
-
-
 def get_country_name(country_code):
     return COUNTRY_CODE_LIST[country_code]
+
+
+def slugify(text, delim=u'-'):
+    """Generates an slightly worse ASCII-only slug."""
+    result = []
+    for word in _punct_re.split(text.lower()):
+        word = normalize('NFKD', unicode(word)).encode('ascii', 'ignore')
+        if word:
+            result.append(word)
+    return unicode(delim.join(result))

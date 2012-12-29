@@ -2,8 +2,6 @@ import re
 import simplejson
 from datetime import date, time, datetime
 
-from mycouch import db
-
 
 class ExtendedJSONEncoder(simplejson.JSONEncoder):
     def default(self, val):
@@ -13,8 +11,6 @@ class ExtendedJSONEncoder(simplejson.JSONEncoder):
             return val.strftime('%Y-%m-%d')
         elif isinstance(val, time):
             return val.strftime('%H:%M:%S')
-        elif hasattr(val, 'kml'):
-            return {'_geo': val.coords(db.session)}
         return super(ExtendedJSONEncoder, self).default(val)
 
 

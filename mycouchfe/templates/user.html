@@ -1,20 +1,27 @@
 {% extends "base.html" %}
 {% import "bootstrap_wtf.html" as wtf %}
-{% block body_content %}
+{% block hero_unit %}
 <div class="container">
 {% if not user %}
 User not found!
 {% else %}
-<ul>
-<li>Username: {{ user.username }}</li>
-<li>Full name: {{ user.first_name }} {{ user.last_name }}</li>
-<li>From: {{ user.city.name }}, {{ user.country }}</li>
-<li>Email: {{ user.email }}</li>
-</ul>
-{% if is_logged_user %}
-<p><a href="/myactivities">Your activities</a> | <a href="/myreferences">Your references</a> | <a href="/myconnections">Your friends</a></p>
-<p><a href="/create/activity">Create activity</a> | <a href="/create/reference">Create reference</a></p>
+<div>
+<h3>User</h3>
+
+<p>{{ user.first_name }} {{ user.last_name }} ({{ user.username }})</p>
+<p>From <a href="/cities/{{ user.city.id }}">{{ user.city.name }}, {{ user.country }}</a></p>
+</div>
 {% endif %}
+
+<div>
+<h3>References</h3>
+{% if references %}
+{% for reference in references %}
+<p>{{ reference }}</p>
+{% endfor %}
+{% else %}
+<p>No references!</p>
 {% endif %}
+</div>
 </div>
 {% endblock %}

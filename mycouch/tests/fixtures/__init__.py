@@ -2,6 +2,7 @@ import os.path
 from functools import wraps
 from sqlalchemy.inspection import inspect
 from mycouch import db, models
+from mycouch.core.db import Base
 from mycouch.core.serializers import json_loads, json_dumps
 
 
@@ -57,7 +58,8 @@ def _remove_fixture(fixture):
     db.session.rollback()
     for model in res_list:
         query = ('TRUNCATE TABLE %s CASCADE;' % model.__tablename__)
-        db.engine.execute(query)
+        db.session.execute(query)
+        db.session.commit()
 
 
 def import_fixture(fixture):
@@ -66,7 +68,7 @@ def import_fixture(fixture):
 
 def export_all_fixtures():
     model_list = [o for o in models.__dict__.itervalues()
-                  if isinstance(o, type) and issubclass(o, db.Model)]
+                  if isinstance(o, type) and issubclass(o, Base)]
     resp = []
     for model in model_list:
         resp += _export_fixture(model)
@@ -96,9 +98,15 @@ def with_fixtures(*filelist):
         @wraps(fn)
         def fn2(*args, **kwargs):
             import_fixtures_from_files(filelist)
-            resp = fn(*args, **kwargs)
-            remove_fixtures_from_files(filelist)
-            return resp
+
+            try:
+                resp = fn(*args, **kwargs)
+            except:
+                remove_fixtures_from_files(filelist)
+                raise
+            else:
+                remove_fixtures_from_files(filelist)
+                return resp
 
         return fn2
     return decorator

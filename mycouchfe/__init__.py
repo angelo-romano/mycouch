@@ -9,3 +9,5 @@ from mycouchfe import controllers
 
 app.register_blueprint(controllers.site_blueprint)
 app.register_blueprint(controllers.ajax_blueprint)
+
+print (app.url_map)
