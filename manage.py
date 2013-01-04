@@ -48,7 +48,6 @@ class ExportFixtures(Command):
             resp = fixtures.export_fixture(model_class, filters=filters_dict)
         else:
             resp = fixtures.export_all_fixtures()
-        print resp
 
 
 class FixedShell(Shell):

@@ -1,10 +1,9 @@
-import htmlentitydefs
 import re
 
 from datetime import date, time, datetime
 from flaskext.babel import gettext as _
 from mycouch import db
-from unicodedata import normalize
+from unidecode import unidecode
 
 
 _punct_re = re.compile(r'[\t !"#$%&\'()*\-/<=>?@\[\\\]^_`{|},.]+')
@@ -100,11 +99,37 @@ def get_country_name(country_code):
     return COUNTRY_CODE_LIST[country_code]
 
 
+def force_unicode(s):
+    """
+    Forces a string cast to its unicode equivalent (using UTF-8).
+
+    Returns:
+    a unicode-type string.
+    """
+    return (s.decode('utf8')
+            if isinstance(s, str)
+            else unicode(s))
+
+
+def force_str(s):
+    """
+    Forces a string cast to its str equivalent (using UTF-8). It is the
+    str-based equivalent of <force_unicode>.
+
+    Returns:
+    a str-type string.
+    """
+    return (s.encode('utf8')
+            if isinstance(s, unicode)
+            else str(s))
+
+
 def slugify(text, delim=u'-'):
     """Generates an slightly worse ASCII-only slug."""
     result = []
+    text = unidecode(force_unicode(text))
     for word in _punct_re.split(text.lower()):
-        word = normalize('NFKD', unicode(word)).encode('ascii', 'ignore')
+        word = unicode(word).encode('ascii', 'ignore')
         if word:
             result.append(word)
     return unicode(delim.join(result))

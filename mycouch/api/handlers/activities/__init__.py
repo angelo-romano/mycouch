@@ -1,9 +1,10 @@
+from datetime import datetime, timedelta
 from flask import request
 from flask.views import MethodView
 from mycouch.api.auth import login_required
-from mycouch.api.utils import jsonify, get_logged_user
+from mycouch.api.utils import jsonify, get_logged_user, build_error_dict
 from mycouch.core.utils import datetime_from_json
-from mycouch.models import Activity
+from mycouch.models import Activity, City
 from functools import wraps
 
 
@@ -24,28 +25,56 @@ class ActivityHandler(MethodView):
         # TODO - TO BE IMPROVED
         return jsonify([o.serialized for o in Activity.query.all()])
 
-    @login_required()
-    def post(self):
-        logged_user = get_logged_user()
+    @classmethod
+    def validate(cls, user):
+        param_errors = []
         params = dict(
             title=request.json.get('title'),
             description=request.json.get('description'),
             scheduled_from=datetime_from_json(
                 request.json.get('scheduled_from')),
-            creator_id=logged_user.id,
+            creator_id=user.id,
             location=request.json.get('location'),
-            locality_id=request.json.get('locality_id'))
+            city_id=request.json.get('city_id'))
+
+        missing_params = [k for k, v in params.iteritems()
+                          if v in ['', None]]
+
+        param_errors = [
+            'Field "%s" not specified.' % k for k in missing_params]
 
         optional_params = dict(
             scheduled_until=datetime_from_json(
                 request.json.get('scheduled_until')))
 
-        if not all(params.values()):
-            missing_fields = [k for k, v in params.iteritems()
-                              if not v]
-            return (jsonify(error=True, missing=missing_fields), 400, [])
-
         params.update(optional_params)
+
+        # city must exist
+        if (params.get('city_id') and not
+                City.query.filter_by(id=params['city_id']).first()):
+            param_errors.append('Invalid "city_id" value.')
+
+        # can't create activities less than one hour in advance
+        datetime_max = datetime.now() + timedelta(hours=1)
+        if (params.get('scheduled_from') and
+                params['scheduled_from'] < datetime_max):
+            param_errors.append('Invalid "scheduled_from" value.')
+        if (params.get('scheduled_until') and
+                params['scheduled_until'] < datetime_max):
+            param_errors.append('Invalid "scheduled_until" value.')
+
+        if param_errors:  # in case of errors
+            return (False, build_error_dict(param_errors))
+
+        return (True, params)
+
+    @login_required()
+    def post(self):
+        logged_user = get_logged_user()
+        success, params = self.validate(logged_user)
+
+        if not success:
+            return (jsonify(params), 400, [])
 
         activity = Activity(**params)
         activity.save(commit=True)

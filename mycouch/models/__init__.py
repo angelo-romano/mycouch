@@ -13,7 +13,7 @@ from mycouch.core.db import Base
 from mycouch.core.db.types import JSONType, StateType, SlugType
 from mycouch.core.utils import serialize_db_value
 from mycouch.models.mixins import (
-    AutoInitMixin, LocalityMixin, MessagingMixin,
+    AutoInitMixin, AreaMixin, LocalityMixin, MessagingMixin,
     MessagingNotificationMixin, ConnectionMixin)
 
 
@@ -105,7 +105,7 @@ class City(Base, LocalityMixin, AutoInitMixin):
 
 
 # (slug, country_code) are unique as a couple
-UniqueConstraint(City.slug, City.country_code)
+UniqueConstraint(City.slug, City.country_id)
 
 # activates the Geo DDL for City table
 GeometryDDL(City.__table__)
@@ -126,6 +126,34 @@ class MinorLocality(Base, LocalityMixin, AutoInitMixin):
 
 # activates the Geo DDL for City table
 GeometryDDL(MinorLocality.__table__)
+
+
+class Country(Base, AreaMixin, AutoInitMixin):
+    """
+    Main country model.
+    """
+    __tablename__ = 'geo_country'
+    __do_not_serialize__ = ('coordinates', 'languages')
+
+    languages = Column(JSONType, nullable=True)
+
+
+class RegionalArea(Base, AreaMixin, AutoInitMixin):
+    """
+    Main regional area model (i.e., a official/unofficial subnational entity).
+    """
+    __tablename__ = 'geo_regionalarea'
+
+    parent_area_id = Column(
+        Integer, ForeignKey('%s.id' % __tablename__), nullable=True)
+    parent_area = relationship(
+        'RegionalArea',
+        cascade='all, delete', single_parent=True,
+        primaryjoin='remote({0}.c.id)==foreign({0}.c.parent_area_id)'.format(
+            __tablename__))
+
+    country_id = Column(Integer, ForeignKey(Country.id), nullable=False)
+    country = relationship(Country)
 
 
 class Activity(Base, AutoInitMixin):
@@ -154,8 +182,8 @@ class Activity(Base, AutoInitMixin):
     # TODO - should be nullable=False
     location_coordinates = GeometryColumn(Point(2), nullable=True)
 
-    locality_id = Column(Integer, ForeignKey(City.id), nullable=False)
-    locality = relationship(City)
+    city_id = Column(Integer, ForeignKey(City.id), nullable=False)
+    city = relationship(City)
 
     def set_user_rsvp(self, user, rsvp_status):
         activity_rsvp = ActivityRSVP.query.filter_by(

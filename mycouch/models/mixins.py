@@ -10,8 +10,8 @@ from mycouch import db
 from mycouch.core.auth_sa import get_user_class
 from mycouch.core.db import Base
 from mycouch.core.db.types import (
-    JSONType, StateType, SlugType, make_transition)
-from mycouch.core.utils import get_country_name, serialize_db_value, slugify
+    JSONType, HStoreType, SlugType, StateType, make_transition)
+from mycouch.core.utils import serialize_db_value, slugify
 
 
 AuthUserBase = get_user_class(Base)
@@ -32,7 +32,7 @@ class AutoInitMixin(object):
     def __force_serialize__(self):
         return ()
 
-    def _make_slug(self):
+    def _make_slug(self, force_unique=True):
         # slug handling
         slug_fields = [(k, v.type._field)
                        for (k, v) in inspect(self.__class__).columns.items()
@@ -43,7 +43,20 @@ class AutoInitMixin(object):
                 continue
 
             name_field_val = getattr(self, name_field, '')
-            setattr(self, slug_field, slugify(name_field_val))
+            slug_base = slugify(name_field_val)
+            slug = slug_base
+            if self.__class__.query.filter_by(
+                    **{slug_field: slug}).first():
+                with_auto_slug = [long(o.slug.split('--')[-1])
+                                  for o in self.__class__.query.filter(
+                                      getattr(self.__class__, slug_field).like(
+                                          '%s--%%' % slug_base)).all()]
+                if with_auto_slug:
+                    max_id = max(with_auto_slug)
+                else:
+                    max_id = 0
+                slug = '%s--%s' % (slug_base, max_id + 1)
+            setattr(self, slug_field, slug)
 
     def force_serialize(self, fields):
         if fields:
@@ -234,28 +247,52 @@ class MessagingNotificationMixin(object):
         self.save()
 
 
+class AreaMixin(object):
+    """
+    The area mixin (e.g., region, country).
+    """
+    id = declared_attr(lambda self: Column(Integer, primary_key=True))
+    name = declared_attr(lambda self: Column(Unicode(128), nullable=False))
+    wikiname = declared_attr(lambda self: Column(Unicode(90)))
+    slug = declared_attr(lambda self: Column(
+        SlugType(field='name'), nullable=False))
+    rating = declared_attr(lambda self: Column(Float, default=0))
+    code = declared_attr(lambda self: Column(Unicode(5), nullable=True))
+
+    capital_city_id = declared_attr(lambda self: Column(
+        Integer, nullable=True))  # TODO - foreignkey here causes circular dep
+    capital_city = declared_attr(lambda self: relationship(
+        'City',
+        primaryjoin=('foreign(%s.c.capital_city_id)==geo_city.c.id'
+                     % self.__tablename__)))
+
+
 class LocalityMixin(object):
     """
     The location mixin.
     """
     __do_not_serialize__ = ('coordinates',)
-    __force_serialize__ = ('country', 'country_code', 'latitude', 'longitude')
+    __force_serialize__ = ('country_code', 'latitude', 'longitude')
 
     id = declared_attr(lambda self: Column(Integer, primary_key=True))
     name = declared_attr(lambda self: Column(Unicode(128), nullable=False))
-    country_code = declared_attr(lambda self: Column(
-        Unicode(5), nullable=False))
-    coordinates = declared_attr(lambda self: GeometryColumn(
-        Point(2), nullable=False))
     wikiname = declared_attr(lambda self: Column(Unicode(90)))
-    timezone = declared_attr(lambda self: Column(Integer, default=0))
     slug = declared_attr(lambda self: Column(
         SlugType(field='name'), nullable=False))
     rating = declared_attr(lambda self: Column(Float, default=0))
 
-    @property
-    def country(self):
-        return get_country_name(self.country_code)
+    coordinates = declared_attr(lambda self: GeometryColumn(
+        Point(2), nullable=False))
+    timezone = declared_attr(lambda self: Column(Integer, default=0))
+    country_id = declared_attr(lambda self: Column(
+        Integer, ForeignKey('geo_country.id'), nullable=False))
+    country = declared_attr(lambda self: relationship(
+        'Country',
+        primaryjoin=('foreign(%s.c.country_id)==geo_country.c.id'
+                     % self.__tablename__)))
+
+    additional_data = declared_attr(lambda self: Column(
+        HStoreType, nullable=False, default={}))
 
     @property
     def latitude(self):
@@ -264,3 +301,7 @@ class LocalityMixin(object):
     @property
     def longitude(self):
         return db.session.scalar(self.coordinates.y)
+
+    @property
+    def country_code(self):
+        return self.country.code
