@@ -10,7 +10,7 @@ sys.path.append(cur_dir)
 
 from mycouch import app, db
 from mycouch.core.serializers import json_loads
-from mycouch.tests.fixtures import with_fixtures
+from mycouch.tests.fixtures import with_base_fixtures
 from mycouch.tests.helpers import (
     DATABASE_CONFIG, prepare_database, auth_user, send_call)
 
@@ -27,12 +27,12 @@ class LocationTestCase(unittest.TestCase):
         db.create_all()
         self.app = app.test_client()
 
-    @with_fixtures('city', 'user')
+    @with_base_fixtures
     def test_this(self):
         data = {
             'rating': Decimal('1.41199860'),
             'name': 'Hobro',
-            'country_code': 'DEN',
+            'country_id': 11,  # Germany
             'latitude': Decimal('56.6332999999999984'),
             'timezone': 1,
             'slug': 'hobro',
@@ -42,7 +42,7 @@ class LocationTestCase(unittest.TestCase):
         data2 = {
             'rating': Decimal('1.80019736'),
             'name': 'Hoddesdon',
-            'country_code': 'GBR',
+            'country_id': 11,  # Germany
             'latitude': Decimal('51.7500000000000000'),
             'timezone': 0,
             'type': 'cities',

@@ -1,3 +1,6 @@
+"""
+The root database handling module.
+"""
 from sqlalchemy.inspection import inspect
 from geoalchemy import GeometryColumn, WKTSpatialElement, Geometry
 

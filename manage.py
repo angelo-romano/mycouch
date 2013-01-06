@@ -48,6 +48,9 @@ class ExportFixtures(Command):
             resp = fixtures.export_fixture(model_class, filters=filters_dict)
         else:
             resp = fixtures.export_all_fixtures()
+        output_filename = '/tmp/output.json'
+        with open(output_filename, 'w') as fh:
+            fh.write(resp)
 
 
 class FixedShell(Shell):

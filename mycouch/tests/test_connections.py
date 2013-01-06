@@ -9,7 +9,7 @@ sys.path.append(cur_dir)
 
 from mycouch import app, db
 from mycouch.core.serializers import json_loads
-from mycouch.tests.fixtures import with_fixtures
+from mycouch.tests.fixtures import with_base_fixtures
 from mycouch.tests.helpers import (
     DATABASE_CONFIG, prepare_database, auth_user, send_call)
 
@@ -26,7 +26,7 @@ class ConnectionTestCase(unittest.TestCase):
             db.create_all()
         self.app = app.test_client()
 
-    @with_fixtures('city', 'user')
+    @with_base_fixtures
     def test_friendship(self):
         # AUTHENTICATION here
         logged_user = auth_user(self.app, 'angelo', 'ciao')
@@ -145,7 +145,7 @@ class ConnectionTestCase(unittest.TestCase):
         resp_data = json_loads(resp.data)
         self.assertEquals(resp_data.get('type_status'), 'accepted')
 
-    @with_fixtures('city', 'user')
+    @with_base_fixtures
     def test_reference(self):
         # AUTHENTICATION here
         logged_user = auth_user(self.app, 'angelo', 'ciao')

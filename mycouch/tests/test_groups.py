@@ -9,7 +9,7 @@ sys.path.append(cur_dir)
 
 from mycouch import app, db
 from mycouch.core.serializers import json_loads
-from mycouch.tests.fixtures import with_fixtures
+from mycouch.tests.fixtures import with_base_fixtures
 from mycouch.tests.helpers import (
     DATABASE_CONFIG, prepare_database, auth_user, send_call)
 
@@ -26,17 +26,17 @@ class LocationTestCase(unittest.TestCase):
         db.create_all()
         self.app = app.test_client()
 
-    @with_fixtures('city', 'user')
+    @with_base_fixtures
     def test_this(self):
         group = {
             'title': 'Main Berlin Group',
             'description': 'Description',
-            'city_id': 335,
+            'city_id': 1,
         }
         subgroup = {
             'title': 'Main Berlin Subgroup',
             'description': 'Description',
-            'city_id': 335,
+            'city_id': 1,
         }
         # AUTHENTICATION here
         logged_user = auth_user(self.app, 'angelo', 'ciao')

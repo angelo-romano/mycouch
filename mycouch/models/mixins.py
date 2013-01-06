@@ -1,3 +1,6 @@
+"""
+The main model mixin module. All mixin classes are defined here.
+"""
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.inspection import inspect
 from datetime import datetime
@@ -59,6 +62,14 @@ class AutoInitMixin(object):
             setattr(self, slug_field, slug)
 
     def force_serialize(self, fields):
+        """
+        Provides the functionality to force field serialization at run-time
+        level.
+
+        :param fields: the field, or the list of fields, to be forced for
+                       serialization.
+        :type fields: str, list
+        """
         if fields:
             fields_to_add = (
                 list(fields)
@@ -69,6 +80,10 @@ class AutoInitMixin(object):
 
     @property
     def serialized(self):
+        """
+        The JSON-friendly serialized version of this specific object for
+        API purposes.
+        """
         resp = {}
         fields = set((o.name for o in inspect(self.__class__).columns))
         fields = set((a for a in fields if not a.startswith('_')
@@ -84,6 +99,14 @@ class AutoInitMixin(object):
         return resp
 
     def save(self, commit=False):
+        """
+        Saves the current ORM class instance. It also ensures slug values are
+        being appropriately generated if needed.
+
+        :param commit: an optional boolean, set it to True to force the commit
+                       operation as well. Default False.
+        :type commit: bool
+        """
         self._make_slug()
         db.session.add(self)
         if commit:
@@ -162,6 +185,14 @@ class MessagingMixin(object):
             self.__tablename__)))
 
     def change_flags(self, add=None, remove=None):
+        """
+        NOT IMPLEMENTED YET.
+
+        :param add: the list of flags to be added.
+        :type add: list
+        :param remove: the list of flags to be removed.
+        :type remove: list
+        """
         pass
 
     @property
@@ -171,9 +202,21 @@ class MessagingMixin(object):
 
     @classmethod
     def get_incoming(cls, user, additional_filters=None):
+        """
+        Gets a list of incoming messages for a specific user.
+
+        :param user: the requested user.
+        :type user: <User>
+        :param additional_filters: an optional dictionary of additional
+                                   message filtering conditions.
+        :type additional_filters: dict
+
+        :returns: a list of outgoing message instances.
+        :rtype: list
+        """
         query = cls.query.filter(and_(
             cls.__notification_class__.message_id == cls.id,
-            cls.user_id == user.id))
+            cls.__notification_class__.user_id == user.id))
         if additional_filters:
             if isinstance(additional_filters, dict):
                 query = query.filter_by(**additional_filters)
@@ -183,6 +226,18 @@ class MessagingMixin(object):
 
     @classmethod
     def get_outgoing(cls, user, additional_filters=None):
+        """
+        Gets a list of outgoing messages for a specific user.
+
+        :param user: the requested user.
+        :type user: <User>
+        :param additional_filters: an optional dictionary of additional
+                                   message filtering conditions.
+        :type additional_filters: dict
+
+        :returns: a list of outgoing message instances.
+        :rtype: list
+        """
         query = cls.query.filter(cls.sender_id == user.id)
         if additional_filters:
             if isinstance(additional_filters, dict):
@@ -193,25 +248,75 @@ class MessagingMixin(object):
 
     def send_to(self, *user_list):
         """
-        Message send operation.
+        Sends this message to a specified list of users, also creating
+        the associated notification objects accordingly.
+
+        :params user_list: a list of users.
+        :type user_list: list
         """
         notification_class = self.__notification_class__
         self.recipient_list_ids = [o.id for o in user_list]
-        self.save()
+        self.save(commit=True)
         for user in user_list:
             notification = notification_class(
-                user=user,
+                user_id=user.id,
                 message=self)
             notification.save()
+
         if self.reply_to_id:
-            reply_notification = notification_class.query.filter(
-                id=self.reply_to_id).first()
+            # message sent as a "reply" to a previous one
+            reply_notification = notification_class.query.filter_by(
+                message_id=self.reply_to_id,
+                user_id=self.sender_id).first()
+            if not reply_notification:
+                raise ValueError('Unexpected error')
+
             make_transition(reply_notification, 'status', 'replied')
             reply_notification.save()
         self.commit()
 
+    def get_notification(self, user):
+        """
+        Returns the notification object associated to a specific user for
+        this message.
+
+        :param user: the requested user account.
+        :type user: <User>
+
+        :returns: a notification object.
+        :rtype: object
+        """
+        notification_class = self.__notification_class__
+        if user.id == self.sender_id:
+            return
+        else:
+            entry = notification_class.query.filter(and_(
+                notification_class.message == self,
+                notification_class.user == user)).first()
+            if not entry:
+                raise ValueError('Invalid user ID!')
+            return entry
+
     def serialized_func(self, user):
-        return self.serialized
+        """
+        Provides the appropriate object serialization for API purposes.
+
+        :param user: the currently logged user.
+        :type user: <User>
+
+        :returns: the serialization of the current message.
+        :rtype: dict
+        """
+        resp = {}
+        try:
+            notification = self.get_notification(user)
+        except ValueError:  # invalid user
+            return {}  # nothing to return
+        else:
+            resp['message_status'] = (
+                notification.status.get('current') if notification else '')
+        resp.update(self.serialized)
+        return resp
 
 
 class MessagingNotificationMixin(object):
@@ -239,9 +344,21 @@ class MessagingNotificationMixin(object):
             'archived': ['deleted'],
         }
 
+    @property
+    def current_status(self):
+        return self.status.get('current')
+
     def change_status(self, new_status):
-        if (self.__state_transitions__ and
-                new_status not in self.__state_transitions__[self.status]):
+        """
+        Changes the notification status to a new value.
+
+        :param new_status: the expected new status.
+        :type new_status: str
+
+        :raises: `ValueError` in case of invalid transition.
+        """
+        if (self.__state_transitions__ and new_status not in
+                self.__state_transitions__[self.current_status]):
             raise ValueError('Invalid state transition.')
         make_transition(self, 'status', new_status)
         self.save()
@@ -251,6 +368,8 @@ class AreaMixin(object):
     """
     The area mixin (e.g., region, country).
     """
+    __do_not_serialize__ = ('wikiname',)
+
     id = declared_attr(lambda self: Column(Integer, primary_key=True))
     name = declared_attr(lambda self: Column(Unicode(128), nullable=False))
     wikiname = declared_attr(lambda self: Column(Unicode(90)))
@@ -271,7 +390,7 @@ class LocalityMixin(object):
     """
     The location mixin.
     """
-    __do_not_serialize__ = ('coordinates',)
+    __do_not_serialize__ = ('coordinates', 'additional_data', 'wikiname')
     __force_serialize__ = ('country_code', 'latitude', 'longitude')
 
     id = declared_attr(lambda self: Column(Integer, primary_key=True))

@@ -1,9 +1,13 @@
+"""
+Custom database types for SQLAlchemy usage.
+"""
 import collections
 import simplejson
 
 from sqlalchemy.inspection import inspect
 from sqlalchemy.types import (
     TypeDecorator, VARCHAR, Unicode, UserDefinedType)
+from sqlalchemy.dialects.postgresql import HSTORE
 from sqlalchemy.ext.mutable import Mutable
 
 
@@ -34,6 +38,38 @@ class MutationDict(Mutable, dict):
         self.changed()
 
 
+class StateMutationDict(Mutable, dict):
+    @classmethod
+    def coerce(cls, key, value):
+        "Convert plain dictionaries to StateMutationDict."
+
+        if not isinstance(value, StateMutationDict):
+            if isinstance(value, dict):
+                return StateMutationDict(value)
+            elif isinstance(value, basestring):
+                return StateMutationDict({
+                    'current': value,
+                    '1': simplejson.dumps([value, ''])})
+
+            # this call will raise ValueError
+            return Mutable.coerce(key, value)
+        else:
+            return value
+
+    def __setitem__(self, key, value):
+        "Detect dictionary set events and emit change events."
+
+        dict.__setitem__(self, key, value)
+        self.changed()
+
+    def __delitem__(self, key):
+        "Detect dictionary del events and emit change events."
+
+        dict.__delitem__(self, key)
+        self.changed()
+
+
+
 class JSONType(TypeDecorator):
     "Represents an immutable structure as a json-encoded string."
 
@@ -60,145 +96,7 @@ class SlugType(TypeDecorator):
         self._field = field
 
 
-class HStoreType(UserDefinedType):
-    """The ``hstore`` type that stores a dictionary.  It can take an any
-    instance of :class:`collections.Mapping`.
-
-    It can be extended to store other types than string e.g.::
-
-        class IntegerBooleanHstore(Hstore):
-            '''The ``hstore`` type for integer keys and boolean values.'''
-
-            def map_bind_key(self, key):
-                if key is not None:
-                    return unicode(key)
-
-            def map_bind_value(self, value):
-                if value is not None:
-                    return u't' if value else u'f'
-
-            def map_result_key(self, key):
-                if key is not None:
-                    return int(key)
-
-            def map_result_value(self, value):
-                if value is not None:
-                    return value == u't'
-
-    :param value_nullable: to prevent ``None`` (``NULL``) for dictionary
-                           values, set it ``True``. default is ``False``
-    :type value_nullable: :class:`bool`
-
-    """
-
-    def __init__(self, value_nullable=True):
-        self.value_nullable = bool(value_nullable)
-
-    def map_bind_key(self, key):
-        """The mapping function that is used for binding keys.  The default
-        implementation is just a string identity function.
-
-        :param key: a key object to bind
-        :returns: a mapped key string
-        :rtype: :class:`unicode`
-
-        """
-        if key is None:
-            return
-        if not isinstance(key, basestring):
-            raise TypeError('hstore key must be a string, not ' + repr(key))
-        return unicode(key)
-
-    def map_bind_value(self, value):
-        """The mapping function that is used for binding values.
-        The default implementation is just a string identity function.
-
-        :param value: a value to bind
-        :returns: a mapped value string
-        :rtype: :class:`unicode`
-
-        """
-        if value is None:
-            return
-        if not isinstance(value, basestring):
-            raise TypeError('hstore value must be a string, not ' +
-                            repr(value))
-        return unicode(value)
-
-    def map_result_key(self, key):
-        """The mapping function that is used for resulting keys.  The default
-        implementation is just an identity function.
-
-        :param key: a raw key of the result
-        :type key: :class:`unicode`
-        :returns: a mapped key object
-
-        """
-        return key
-
-    def map_result_value(self, value):
-        """The mapping function that is used for resulting values.
-        The default implementation is just an identity function.
-
-        :param key: a raw value of the result
-        :type key: :class:`unicode`
-        :returns: a mapped value
-
-        """
-        return value
-
-    def get_col_spec(self):
-        return 'hstore'
-
-    def is_mutable(self):
-        return True
-
-    def compare_values(self, x, y):
-        x = None if x is None else dict(x)
-        y = None if y is None else dict(y)
-        return x == y
-
-    def copy_value(self, value):
-        if value is not None:
-            return dict(value)
-
-    def bind_processor(self, dialect):
-        def process(value):
-            if value is None:
-                return
-            if not isinstance(value, collections.Mapping):
-                raise TypeError('expected a collections.Mapping object, not '
-                                + repr(value))
-            items = getattr(value, 'iteritems', value.items)()
-            map_bind_key = self.map_bind_key
-
-            def map_key(key):
-                if key is None:
-                    raise TypeError('hstore key cannot be None')
-                return map_bind_key(key)
-
-            if self.value_nullable:
-                map_value = self.map_bind_value
-            else:
-                map_bind_value = self.map_bind_value
-
-                def map_value(value):
-                    if value is None:
-                        raise TypeError('hstore value cannot be None')
-                    return map_bind_value(value)
-
-            return dict((map_key(k), map_value(v)) for k, v in items)
-        return process
-
-    def result_processor(self, dialect, coltype):
-        def process(value):
-            map_key = self.map_result_key
-            map_value = self.map_result_value
-            return dict((map_key(k), map_value(v))
-                        for k, v in value.iteritems())
-        return process
-
-# make JSONType a mutable type
+HStoreType = HSTORE
 MutationDict.associate_with(HStoreType)
 
 
@@ -211,18 +109,23 @@ class StateType(TypeDecorator):
     Unspecified states are automatically considered as final ones.
     """
 
-    impl = HStoreType
+    impl = HSTORE
 
     def __init__(self, choices=None, transitions=None, *args, **kwargs):
         super(StateType, self).__init__(*args, **kwargs)
         if transitions and not choices and isinstance(transitions, dict):
             choices = set(transitions.keys() + sum(transitions.values(), []))
-        if not isinstance(choices, (list, set, tuple, frozenset)):
-            raise TypeError('Invalid choices type')
+
         if not choices:
             raise ValueError('Choices cannot be empty')
-        self._choices = set(choices)
+        if not isinstance(choices, (list, set, tuple, frozenset)):
+            raise TypeError('Invalid choices type')
+
+        self._choices = set(choices) if choices else set()
         self._transition_dict = transitions
+
+    def is_mutable(self):
+        return True
 
     def evaluate_transition(self, value1, value2):
         if not self._transition_dict:  # no dict, all transitions allowed
@@ -238,14 +141,21 @@ class StateType(TypeDecorator):
 
     def process_bind_param(self, value, dialect):
         if not isinstance(value, dict):
-            return {'success': value, '1': simplejson.dumps([value, ''])}
+            return {'current': value, '1': simplejson.dumps([value, ''])}
         return value
+
+# make StateType a mutable type
+StateMutationDict.associate_with(StateType)
 
 
 def make_transition(instance, fieldname, new_value, author_id=None):
     type_instance = inspect(instance.__class__).columns[fieldname].type
-    curval = getattr(instance, fieldname) or MutationDict()
+    curval = StateMutationDict(getattr(instance, fieldname)) or StateMutationDict()
     curval_current = curval.get('current')
+
+    if new_value == curval_current:
+        # no need to update
+        return
 
     # will raise exception in case of failure
     if not curval_current or type_instance.evaluate_transition(

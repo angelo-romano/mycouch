@@ -42,7 +42,7 @@ class LocationHandler(MethodView):
 
         params = dict(
             name=request.json.get('name'),
-            country_code=request.json.get('country_code'),
+            country_id=request.json.get('country_id'),
             latitude=request.json.get('latitude'),
             longitude=request.json.get('longitude'))
 

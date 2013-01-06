@@ -110,3 +110,7 @@ def with_fixtures(*filelist):
 
         return fn2
     return decorator
+
+
+def with_base_fixtures(fn):
+    return with_fixtures('country', 'city', 'user')(fn)

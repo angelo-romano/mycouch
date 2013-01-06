@@ -106,10 +106,10 @@ class CityCounter(object):
             if place in self.town_levels:
                 type = 'town'
             if place in self.subtown_levels:
-                if 'is_in' not in tags:
-                    type = 'town'
-                else:
-                    type = 'subtown'
+                # if 'is_in' not in tags:
+                type = 'town'
+                #else:
+                #    type = 'subtown'
             elif place in self.suburb_levels:
                 type = 'subtown'
             if type:
@@ -126,10 +126,10 @@ class CityCounter(object):
             if place in self.town_levels:
                 self.entries_main.append({'name': name, 'coords': coords, 'tags': tags})
             if place in self.subtown_levels:
-                if 'is_in' not in tags:
-                    self.entries_main.append({'name': name, 'coords': coords, 'tags': tags})
-                else:
-                    self.entries_sub.append({'name': name, 'coords': coords, 'tags': tags})
+                #if 'is_in' not in tags:
+                self.entries_main.append({'name': name, 'coords': coords, 'tags': tags})
+                #else:
+                #    self.entries_sub.append({'name': name, 'coords': coords, 'tags': tags})
             elif place in self.suburb_levels:
                 self.entries_sub.append({'name': name, 'coords': coords, 'tags': tags})
 
@@ -161,6 +161,7 @@ if __name__ == '__main__':
             name = this_entry.get('name')
             coords = this_entry.get('coords')
             tags = simplejson.dumps(this_entry.get('tags'))
+            print name, coords, added_names, (not name), (name in added_names)
             if not name:
                 continue
             if name in added_names:

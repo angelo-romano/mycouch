@@ -79,8 +79,15 @@ class MessageHandler(MethodView):
 
         # checking for additional param validity
         if optional_params['reply_to_id']:
-            parent_msg = cls.query.filter(id=optional_params['reply_to_id'])
-            if user.id not in parent_msg.recipient_list_ids:
+            parent_msg = cls.query.filter_by(
+                id=optional_params['reply_to_id']).first()
+
+            if not parent_msg:
+                # cannot reply to the original message - not found
+                return (False,
+                        build_error_dict(['Original message not found.']))
+            elif user.id not in parent_msg.recipient_list_ids:
+                # user not in the destination list
                 return (False,
                         build_error_dict(['Cannot reply to this message.']))
 
@@ -176,31 +183,46 @@ class MessageByIDHandler(MethodView):
         msg_dict = MESSAGE_TYPE_MAPPING[msgtype]
         msg_notification_class = msg_dict['notification_class']
 
-        try:
-            msg_list = filter_by_direction(
-                msgtype, direction, user, additional_filters={'id': id})
-        except ValueError:
+        if direction == 'out':  # PATCH op is allowed only for incoming msgs
+            return ('FORBIDDEN', 403, [])
+        elif direction != 'in':  # Invalid direction value
             return ('DIRECTION', 400, [])
+
+        msg_list = filter_by_direction(
+            msgtype, 'in', user, additional_filters={'id': id})
         if not msg_list:
             return ('NOT FOUND', 404, [])
+
         msg = msg_list[0]
 
         added_flags, removed_flags = (
             request.json.get('flags_in'),
             request.json.get('flags_out'))
 
-        msg.flag(added_flags, removed_flags)
+        msg.change_flags(added_flags, removed_flags)
 
-        if direction == 'in':
-            msg_notification = msg_notification_class.query.filter_by(
-                user_id=user.id, message_id=msg.id).first()
+        msg_notification = msg.get_notification(user)
+        errors = []
+
+        try:
             msg_notification.change_status(request.json.get('message_status'))
+        except ValueError:  # Invalid transition
+            errors.append('Invalid "message_status" value.')
 
         if msgtype == 'hospitality_request':
             request_status = request.json.get('request_status')
             if (request_status and
                 ((direction == 'out' and request_status == 'canceled')
                  or direction == 'in' and msg.status != 'canceled')):
-                msg.change_status(request_status)
+                try:
+                    msg.change_status(request_status)
+                except ValueError:  # Invalid transition
+                    errors.append('Invalid "request_status" value.')
 
+        if errors:  # Errors found, returns error structure
+            return (jsonify(build_error_dict(errors)), 400, [])
+
+        # in case of success, returns the updated message serialization
+        msg.save()
+        msg_notification.save(commit=True)
         return jsonify(msg.serialized_func(user))

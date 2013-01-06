@@ -1,3 +1,6 @@
+"""
+The root module containing all SQLALchemy model definitions.
+"""
 from datetime import datetime, date
 from geoalchemy import (
     GeometryDDL, GeometryColumn, Point)
@@ -26,6 +29,10 @@ GENDER_CHOICES = {  # ISO/IEC 5218
     '2': u'Male',
     '9': u'Not applicable',
 }
+"""
+The ISO/IEC 5218 convention for gender choices. Used in the <User> model
+definition.
+"""
 
 
 class User(AuthUserBase, AutoInitMixin):
@@ -52,18 +59,39 @@ class User(AuthUserBase, AutoInitMixin):
 
     @property
     def gender_description(self):
+        """
+        The full gender description (e.g., 'Male', 'Female').
+
+        :rtype: str
+        """
         return GENDER_CHOICES[self.gender]
 
     @property
     def country_code(self):
+        """
+        The country code for the current user's nationality. Country codes
+        follow the ISO 3166-1 alpha 3 definition.
+
+        :rtype: str
+        """
         return self.city.country_code if self.city else None
 
     @property
     def country(self):
+        """
+        The country object for this specific user.
+
+        :rtype: <Country>
+        """
         return self.city.country if self.city else None
 
     @property
     def age(self):
+        """
+        The user's current age.
+
+        :rtype: int
+        """
         today = date.today()
 
         try:
@@ -82,7 +110,8 @@ class User(AuthUserBase, AutoInitMixin):
 
 class UserProfileDetails(Base, AutoInitMixin):
     """
-    User profile details for a specific account.
+    User profile details for a specific account (e.g., profile sections,
+    websites of reference, additional profile details).
     """
     __tablename__ = 'auth_userprofiledetails'
     __do_not_serialize__ = (
@@ -113,7 +142,9 @@ GeometryDDL(City.__table__)
 
 class MinorLocality(Base, LocalityMixin, AutoInitMixin):
     """
-    Model representing a "minor locality" (not an official city).
+    Model representing a "minor locality" (not an official city, can be a
+    neighbourhood or a smaller village which is administratively part of a
+    larger municipality).
     """
     __tablename__ = 'geo_minorlocality'
 
@@ -133,7 +164,7 @@ class Country(Base, AreaMixin, AutoInitMixin):
     Main country model.
     """
     __tablename__ = 'geo_country'
-    __do_not_serialize__ = ('coordinates', 'languages')
+    __do_not_serialize__ = ('languages', 'wikiname')
 
     languages = Column(JSONType, nullable=True)
 
@@ -186,6 +217,14 @@ class Activity(Base, AutoInitMixin):
     city = relationship(City)
 
     def set_user_rsvp(self, user, rsvp_status):
+        """
+        Registers the specific user to a given RSVP status.
+
+        :param user: the user object.
+        :type user: <User>
+        :param rsvp_status: the RSVP status (one of 'yes', 'no', 'maybe').
+        :type rsvp_status: str
+        """
         activity_rsvp = ActivityRSVP.query.filter_by(
             activity_id=self.id,
             user_id=user.id).first()
@@ -200,6 +239,14 @@ class Activity(Base, AutoInitMixin):
 
     @property
     def attending_count(self):
+        """
+        A dictionary structure containing the number of registered users
+        per RSVP status, in the form
+
+            {"yes": X, "maybe": Y, "no": Z}
+
+        :rtype: dict
+        """
         base_query = ActivityRSVP.query.filter_by(activity_id=self.id)
         return dict((k, base_query.filter_by(rsvp_status=k).count())
                     for k in ActivityRSVP.RSVP_STATUSES)
@@ -240,10 +287,6 @@ class PrivateMessage(Base, MessagingMixin, AutoInitMixin):
     """
     __tablename__ = 'message_privatemessage'
 
-    @property
-    def __notification_class__(self):
-        return PrivateMessageNotification
-
     __mapper_args__ = {
         'polymorphic_on': 'type',
         'polymorphic_identity': 'private_message'}
@@ -256,6 +299,8 @@ class PrivateMessageNotification(Base, MessagingNotificationMixin,
     """
     __tablename__ = 'message_privatemessagenotification'
     __message_class__ = PrivateMessage
+
+PrivateMessage.__notification_class__ = PrivateMessageNotification
 
 
 class HospitalityRequest(Base, MessagingMixin, AutoInitMixin):
@@ -270,14 +315,17 @@ class HospitalityRequest(Base, MessagingMixin, AutoInitMixin):
         'canceled': ['accepted', 'maybe'],
     }
 
-    @property
-    def __notification_class__(self):
-        return HospitalityRequestNotification
-
     status = Column(StateType(transitions=__state_transitions__),
                     default='unread', nullable=False)
 
     def change_status(self, new_status):
+        """
+        Changes the status of this hospitality request to a new one.
+
+        :param new_status: the new status (one of 'accepted', 'refused',
+                           'maybe', 'canceled').
+        :type new_status: str
+        """
         if (self.__state_transitions__ and
                 new_status not in self.__state_transitions__[self.status]):
             raise ValueError('Invalid state transition.')
@@ -296,6 +344,8 @@ class HospitalityRequestNotification(Base, MessagingNotificationMixin,
     """
     __tablename__ = 'message_hospitalityrequestnotification'
     __message_class__ = HospitalityRequest
+
+HospitalityRequest.__notification_class__ = HospitalityRequestNotification
 
 
 class FriendshipConnection(Base, ConnectionMixin, AutoInitMixin):
@@ -326,13 +376,39 @@ class FriendshipConnection(Base, ConnectionMixin, AutoInitMixin):
 
     @classmethod
     def validate_friendship_level(cls, level):
+        """
+        Checks if a specific friendship level is compliant with the allowed
+        alternatives.
+
+        :param level: the friendship level to be validated.
+        :type level: str
+
+        :returns: True if it is valid, False otherwise.
+        :rtype: bool
+        """
         return (level in cls.FRIENDSHIP_LEVEL_CHOICES)
 
     @property
     def friendship_level_description(self):
+        """
+        The full description of the friendship level for this specific
+        connection object (e.g., 'Acquaintance', 'Friend', etc.)
+
+        :rtype: str
+        """
         return self.FRIENDSHIP_LEVEL_CHOICES.get(self.friendship_level)
 
     def serializer_func(self, user):
+        """
+        Given the currently logged user, returns the appropriate serialization.
+
+        :param user: the current user.
+        :type user: <User>
+
+        :returns: the JSON-friendly representation of this connection for API
+                  purposes.
+        :rtype: dict
+        """
         resp = self.serialized
         resp['user_id'] = serialize_db_value(
             self.user_from_id
@@ -361,9 +437,29 @@ class Reference(Base, ConnectionMixin, AutoInitMixin):
 
     @classmethod
     def validate_reference_type(cls, reftype):
+        """
+        Checks if a specific reference level is compliant with the allowed
+        alternatives.
+
+        :param level: the reference level to be validated.
+        :type level: str
+
+        :returns: True if it is valid, False otherwise.
+        :rtype: bool
+        """
         return (reftype in cls.__state_transitions__)
 
     def serializer_func(self, user):
+        """
+        Given the currently logged user, returns the appropriate serialization.
+
+        :param user: the current user.
+        :type user: <User>
+
+        :returns: the JSON-friendly representation of this reference for API
+                  purposes.
+        :rtype: dict
+        """
         resp = self.serialized
         update_dict = (
             ('user_id', (self.user_from_id

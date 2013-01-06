@@ -1,3 +1,7 @@
+"""
+Custom JSON serialization module, providing support for types who are not
+natively recognized by `simplejson` (e.g., datetime objects or geometries).
+"""
 import re
 import simplejson
 from datetime import date, time, datetime

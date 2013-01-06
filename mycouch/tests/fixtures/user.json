@@ -1,1 +1,36 @@
-[{"username": "angelo", "_model": "User", "first_name": "Angelo", "last_name": "Romano", "created": "2012-12-29T23:13:59", "city_id": 335, "gender": "2", "is_active": true, "modified": null, "email": "angelo.romano@gmail.com", "role": null, "birth_date": "1982-06-19", "password": "c1b175bfb5685e32f36d945561794a0de7178e8d", "salt": "1356822622", "id": 1}, {"username": "delgog", "_model": "User", "first_name": "Vicente", "last_name": "Delgog", "created": "2012-12-29T23:25:08", "city_id": 335, "gender": "2", "is_active": true, "modified": null, "email": "v.delgog@mail.com", "role": null, "birth_date": "1977-11-14", "password": "414f6f20d57301c08766c70739b2d506e38edacf", "salt": "1356822997", "id": 2}]
+[
+    {
+        "username": "angelo",
+        "_model": "User",
+        "first_name": "Angelo",
+        "last_name": "Romano",
+        "created": "2012-12-29T23:13:59",
+        "city_id": 1,
+        "gender": "2",
+        "is_active": true,
+        "modified": null,
+        "id": 1,
+        "role": null,
+        "birth_date": "1982-06-19",
+        "password": "c1b175bfb5685e32f36d945561794a0de7178e8d",
+        "salt": "1356822622",
+        "email": "angelo.romano@gmail.com"
+    },
+    {
+        "username": "delgog",
+        "_model": "User",
+        "first_name": "Vicente",
+        "last_name": "Delgog",
+        "created": "2012-12-29T23:25:08",
+        "city_id": 2,
+        "gender": "2",
+        "is_active": true,
+        "modified": null,
+        "id": 2,
+        "role": null,
+        "birth_date": "1977-11-14",
+        "password": "414f6f20d57301c08766c70739b2d506e38edacf",
+        "salt": "1356822997",
+        "email": "v.delgog@mail.com"
+    }
+]

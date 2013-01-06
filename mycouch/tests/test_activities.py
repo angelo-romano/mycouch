@@ -10,7 +10,7 @@ sys.path.append(cur_dir)
 
 from mycouch import app, db
 from mycouch.core.serializers import json_loads
-from mycouch.tests.fixtures import with_fixtures
+from mycouch.tests.fixtures import with_base_fixtures
 from mycouch.tests.helpers import (
     DATABASE_CONFIG, prepare_database, auth_user, send_call)
 
@@ -28,7 +28,7 @@ class ActivityTestCase(unittest.TestCase):
             db.create_all()
         self.app = app.test_client()
 
-    @with_fixtures('city', 'user')
+    @with_base_fixtures
     def test_activity(self):
         # AUTHENTICATION here
         logged_user = auth_user(self.app, 'angelo', 'ciao')
@@ -41,7 +41,7 @@ class ActivityTestCase(unittest.TestCase):
         # message failure(s) here
         # 1. invalid status
         request = {
-            'city_id': 335,
+            'city_id': 1,
             'location': 'A location',
             'title': 'Activity name',
             'description': 'Activity description',
@@ -79,7 +79,7 @@ class ActivityTestCase(unittest.TestCase):
 
         # 4. valid - success
         request = {
-            'city_id': 335,  # Berlin
+            'city_id': 1,  # Berlin
             'location': 'A location',
             'title': 'Activity name',
             'description': 'Activity description',
