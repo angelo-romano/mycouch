@@ -2,9 +2,10 @@ from flask import request
 from flask.views import MethodView
 from geoalchemy import WKTSpatialElement
 from mycouch.api.auth import login_required
-from mycouch.api.utils import jsonify, get_logged_user, build_error_dict
+from mycouch.api.utils import (
+    jsonify, get_logged_user, build_error_dict, parse_search_fields)
+from mycouch.lib import search
 from mycouch.models import City, MinorLocality
-from sqlalchemy import func
 
 
 LOCATION_TYPE_MAPPING = {
@@ -22,17 +23,18 @@ class LocationHandler(MethodView):
         if loctype not in LOCATION_TYPE_MAPPING:
             return ('TYPE', '400', [])
         location_class = LOCATION_TYPE_MAPPING[loctype]
-        loc_query = location_class.query
-        if logged_user:
-            make_point = lambda c: func.ST_SetSRID(
-                func.ST_Point(c.x, c.y), 4326)
-            loc_query = loc_query.filter(
-                func.ST_Distance_Sphere(
-                    make_point(location_class.coordinates),
-                    make_point(logged_user.city.coordinates)) < 100000)
-        loc_query = loc_query.order_by('-rating').limit(10)
-        resp = [o.serialized for o in loc_query]
-        return jsonify(resp)
+        #loc_query = location_class.query
+        #if logged_user:
+        #    make_point = lambda c: func.ST_SetSRID(
+        #        func.ST_Point(c.x, c.y), 4326)
+        #    loc_query = loc_query.filter(
+        #        func.ST_Distance_Sphere(
+        #            make_point(location_class.coordinates),
+        #            make_point(logged_user.city.coordinates)) < 100000)
+        fields = parse_search_fields()
+        fields['query_field'] = 'name'
+        resp = search.query(location_class, **fields)
+        return jsonify([obj.serialized for _, obj in resp])
 
     @login_required()
     def post(self, loctype):

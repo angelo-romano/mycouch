@@ -88,7 +88,6 @@ def create_activity():
     form.locality_id.choices = [
         (str(o.get('id')), '[%s] %s' % (o['country_code'], o['name']))
         for o in cities]
-    print form.locality_id.choices
     if form.validate_on_submit():
         reqdata = form.get_request_data()
         resp = api_call('post', '/activities', reqdata)
@@ -133,3 +132,26 @@ def profile(user_id):
         'user.html',
         user=user,
         is_logged_user=is_logged_user)
+
+
+@ajax_blueprint.route('/cities/autocomplete', methods=('GET',))
+def cities_autocomplete():
+    prefix = request.args.get('starts_with')
+    if not prefix or len(prefix) < 2:
+        return jsonify({})
+
+    resp = api_call('get', '/locations/cities', {
+        'query_prefix': prefix,
+        'limit': 20,
+        'order_by': '-rating',
+    })
+    json_data = []
+    if resp.status_code == 200:
+        json_data = [
+            {'name': o['name'], 'id': o['id'], 'rating': o['rating']}
+            for o in resp.json()]
+        print resp.json()
+        json_data = dict(
+            (idx, json_data[idx]) for idx in xrange(len(json_data)))
+    print json_data
+    return jsonify(json_data)

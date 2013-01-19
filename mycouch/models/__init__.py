@@ -7,14 +7,14 @@ from geoalchemy import (
 
 from sqlalchemy import (
     Column, Integer, Unicode, UnicodeText, Date, DateTime, Boolean, Enum,
-    UniqueConstraint, ForeignKey)
+    UniqueConstraint, ForeignKey, or_)
 
 #from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship, backref
 from mycouch.core.auth_sa import get_user_class
 from mycouch.core.db import Base
 from mycouch.core.db.types import JSONType, StateType, SlugType
-from mycouch.core.utils import serialize_db_value
+from mycouch.core.utils import serialize_db_value, force_str, force_unicode
 from mycouch.models.mixins import (
     AutoInitMixin, AreaMixin, LocalityMixin, MessagingMixin,
     MessagingNotificationMixin, ConnectionMixin)
@@ -34,6 +34,13 @@ The ISO/IEC 5218 convention for gender choices. Used in the <User> model
 definition.
 """
 
+HOST_CHOICES = {
+    'yes': 'Yes (most of the time)',
+    'no': 'No, never',
+    'maybe': 'Depends on the person',
+    'sometimes': 'Occasionally',
+    'coffee': 'I can\'t, but I am fine to help/meet anyways!',
+}
 
 class User(AuthUserBase, AutoInitMixin):
     """
@@ -41,9 +48,11 @@ class User(AuthUserBase, AutoInitMixin):
     """
     __tablename__ = 'auth_user'
     __do_not_serialize__ = (
-        'password', 'salt', 'role', 'modified', 'city')
+        'password', 'salt', 'role', 'modified', 'city', 'country')
     __force_serialize__ = (
-        'country', 'country_code', 'details', 'age')
+        'country_code', 'details', 'age',
+        'n_refs', 'n_friends', 'keywords', 'has_details')
+    __searchable__ = True
 
     id = Column(Integer, primary_key=True)
 
@@ -56,6 +65,10 @@ class User(AuthUserBase, AutoInitMixin):
 
     city_id = Column(Integer, ForeignKey('geo_city.id'), nullable=True)
     city = relationship('City')
+
+    can_host = Column(
+        Enum(*HOST_CHOICES.keys(), name='can_host_enum'),
+        default='no', nullable=False)
 
     @property
     def gender_description(self):
@@ -107,6 +120,26 @@ class User(AuthUserBase, AutoInitMixin):
         else:
             return today.year - self.birth_date.year
 
+    @property
+    def n_refs(self):
+        return Reference.query.filter_by(user_to_id=self.id).count()
+
+    @property
+    def n_friends(self):
+        return FriendshipConnection.query.filter(or_(
+            FriendshipConnection.user_from_id == self.id,
+            FriendshipConnection.user_to_id == self.id)).count()
+
+    @property
+    def has_details(self):
+        return bool(self.details and any((
+            self.details.sections, self.details.profile_details)))
+
+    @property
+    def keywords(self):
+        # TO BE IMPLEMENTED
+        return []
+
 
 class UserProfileDetails(Base, AutoInitMixin):
     """
@@ -131,6 +164,15 @@ class City(Base, LocalityMixin, AutoInitMixin):
     Main city model.
     """
     __tablename__ = 'geo_city'
+    __searchable__ = True
+
+    def __str__(self):
+        return force_str(self.name)
+
+    def __repr__(self):
+        return '<City%s%s>' % (
+            '' if not self.id else ' #%s' % self.id,
+            '' if not self.name else ': %s' % force_str(self.name))
 
 
 # (slug, country_code) are unique as a couple
@@ -147,6 +189,7 @@ class MinorLocality(Base, LocalityMixin, AutoInitMixin):
     larger municipality).
     """
     __tablename__ = 'geo_minorlocality'
+    __searchable__ = True
 
     # choices neighbourhood, village, hamlet, town, suburb, etc.
     locality_type = Column(Unicode(20), nullable=False)
@@ -165,6 +208,7 @@ class Country(Base, AreaMixin, AutoInitMixin):
     """
     __tablename__ = 'geo_country'
     __do_not_serialize__ = ('languages', 'wikiname')
+    __searchable__ = True
 
     languages = Column(JSONType, nullable=True)
 
@@ -174,6 +218,7 @@ class RegionalArea(Base, AreaMixin, AutoInitMixin):
     Main regional area model (i.e., a official/unofficial subnational entity).
     """
     __tablename__ = 'geo_regionalarea'
+    __searchable__ = True
 
     parent_area_id = Column(
         Integer, ForeignKey('%s.id' % __tablename__), nullable=True)
@@ -196,6 +241,7 @@ class Activity(Base, AutoInitMixin):
         'creator_id',)
     __force_serialize__ = (
         'attending_count',)
+    __searchable__ = True
 
     id = Column(Integer, primary_key=True)
 
@@ -291,6 +337,32 @@ class PrivateMessage(Base, MessagingMixin, AutoInitMixin):
         'polymorphic_on': 'type',
         'polymorphic_identity': 'private_message'}
 
+    @classmethod
+    def validate_values(cls, values):
+        # mandatory field check
+        mandatory_errors, type_errors, other_errors = (
+            cls._check_mandatory_fields(
+                values, ('subject', 'text',
+                         'sender_id', 'recipient_list_ids')),
+            [], [])
+
+        # other field error check - reply_to_id
+        if values.get('reply_to_id'):
+            parent_msg = cls.query.filter_by(id=values['reply_to_id']).first()
+
+            if not parent_msg:
+                # cannot reply to the original message - not found
+                other_errors.append(
+                    'Original message mentioned by '
+                    '"reply_to_id" not found.')
+            elif (values.get('sender_id') and
+                    values.get('sender_id') not in parent_msg.recipient_list_ids):
+                other_errors.append(
+                    '"reply_to_id" does not reference to a repliable message.')
+
+        return cls._build_validation_dict(
+            mandatory_errors, type_errors, other_errors)
+
 
 class PrivateMessageNotification(Base, MessagingNotificationMixin,
                                  AutoInitMixin):
@@ -314,9 +386,56 @@ class HospitalityRequest(Base, MessagingMixin, AutoInitMixin):
         'maybe': ['accepted', 'refused', 'canceled'],
         'canceled': ['accepted', 'maybe'],
     }
+    date_from = Column(Date, nullable=False)
+    date_to = Column(Date, nullable=False)
+    additional_details = Column(JSONType, nullable=True)
 
     status = Column(StateType(transitions=__state_transitions__),
                     default='unread', nullable=False)
+
+    @classmethod
+    def validate_values(cls, values):
+        # mandatory field check
+        mandatory_errors, type_errors, other_errors = (
+            cls._check_mandatory_fields(
+                values, ('date_from', 'date_to', 'subject', 'text',
+                         'sender_id', 'recipient_list_ids')),
+            [], [])
+
+        # other field error check - reply_to_id
+        if values.get('reply_to_id'):
+            parent_msg = cls.query.filter_by(id=values['reply_to_id']).first()
+
+            if not parent_msg:
+                # cannot reply to the original message - not found
+                other_errors.append(
+                    'Original message mentioned by '
+                    '"reply_to_id" not found.')
+            elif (values.get('sender_id') and
+                    values.get('sender_id') not in parent_msg.recipient_list_ids):
+                other_errors.append(
+                    '"reply_to_id" does not reference to a repliable message.')
+
+        # other field error check - date_from, date_to
+        date_from, date_to = values.get('date_from'), values.get('date_to')
+        recipient_list_ids = values.get('recipient_list_ids')
+        if date_from and date_from < date.today():
+            other_errors.append(
+                'Value for "date_from" cannot be in the past.')
+        if date_to:
+            if date_to < date.today():
+                other_errors.append(
+                    'Value for "date_to" cannot be in the past.')
+            if date_from and date_to < date_from:
+                other_errors.append(
+                    'Value for "date_to" must be greater or equal '
+                    'than "date_from".')
+        if (recipient_list_ids and isinstance(recipient_list_ids, list) and 
+                len(recipient_list_ids) != 1):
+            other_errors.append('Must be exactly one element in "recipient_list_ids".')
+
+        return cls._build_validation_dict(
+            mandatory_errors, type_errors, other_errors)
 
     def change_status(self, new_status):
         """
@@ -480,6 +599,7 @@ class Group(Base, AutoInitMixin):
     The group model.
     """
     __tablename__ = 'group_group'
+    __searchable__ = True
 
     id = Column(Integer, primary_key=True)
     slug = Column(SlugType(field='title'), nullable=False, unique=True)

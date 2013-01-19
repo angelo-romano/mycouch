@@ -1,6 +1,8 @@
 """
 Utility functions for API purposes.
 """
+import re
+
 from flask import abort, request
 from mycouch import app
 from mycouch.api.auth import get_request_token
@@ -61,3 +63,44 @@ def model_by_id(model_class):
             return fn(cls, instance, *args, **kwargs)
         return fn2
     return decorator
+
+
+def parse_search_fields():
+    FIELD_RANGE_REGEX = re.compile('^(?P<from>\d+)\-(?P<to>\d+)$')
+    resp = {}
+    val_query = request.json.get('query')
+    if (val_query and isinstance(val_query, basestring) and
+            '*' not in val_query):  # no special chars allowed
+        resp['query_string'] = request.json.get('query').lower()
+    elif request.json.get('query_prefix'):
+        resp['query_string'] = (
+            '%s*' % request.json.get('query_prefix').lower())
+
+    resp['limit'] = request.json.get('limit') or 100
+
+    if (request.json.get('max_distance_km') and
+            request.json.get('max_distance_from')):
+        resp['max_distance'] = (
+            request.json.get('max_distance_km'),
+            request.json.get('max_distance_from'))
+
+    val_fields = request.json.get('fields')
+    if (val_fields and isinstance(val_fields, dict)):
+        resp['fields'] = {}
+        for (key, val) in val_fields.iteritems():
+            if val in (None, '', []):
+                continue
+            if isinstance(val, basestring):
+                if '*' in val:  # no wildcards allowed here
+                    continue
+                re_match = FIELD_RANGE_REGEX.match(val)
+                if re_match:  # we have a range
+                    val = (re_match.group(1), re_match.group(2))
+            resp['fields'][key] = val
+
+    val_orderby = request.json.get('order_by')
+    if (val_orderby and isinstance(val_orderby, basestring) and
+            val_orderby[0] in ('-', '+')):
+        resp['order_by'] = val_orderby
+
+    return resp

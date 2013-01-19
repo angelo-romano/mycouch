@@ -2,6 +2,7 @@ from flask import request
 from flask.views import MethodView
 from mycouch.api.auth import login_required
 from mycouch.api.utils import jsonify, get_logged_user, build_error_dict
+from mycouch.core.serializers import json_loads
 from mycouch.models import (
     User,
     PrivateMessage, PrivateMessageNotification,
@@ -47,54 +48,44 @@ class MessageHandler(MethodView):
     __resource_name__ = 'messages'
 
     @staticmethod
-    def _validate_message(cls, user):
+    def _validate_message(cls, user, param_extend={}):
         """
         Expected form:
 
             {"subject": str, "text": str, "recipient_list_ids": [int*]}
         """
+        request_json = json_loads(request.data)
+
         # recipient list validation
         recipient_list_objects = User.query.filter(and_(
-            User.id.in_(request.json.get('recipient_list_ids')),
+            User.id.in_(request_json.get('recipient_list_ids')),
             User.id != user.id,
             User.is_active)).all()
         recipient_list_ids = [o.id for o in recipient_list_objects]
         # param dict built here
         params = dict(
-            subject=request.json.get('subject'),
+            # mandatory params here
+            subject=request_json.get('subject'),
             sender_id=user.id,
-            text=request.json.get('text'),
-            recipient_list_ids=recipient_list_ids)
-        optional_params = dict(
-            message_status=request.json.get('message_status'),
-            reply_to_id=request.json.get('reply_to_id'))
+            text=request_json.get('text'),
+            recipient_list_ids=recipient_list_ids,
+            # optional values here
+            message_status=request_json.get('message_status'),
+            reply_to_id=request_json.get('reply_to_id'))
+        params.update(param_extend)
 
         # checking for mandatory parameters
-        missing_mandatory_params = (
-            [k for (k, v) in params.iteritems() if not v])
-        if missing_mandatory_params:
-            return (False, build_error_dict([
-                'Field "%s" not specified' % field
-                for field in missing_mandatory_params]))
-
-        # checking for additional param validity
-        if optional_params['reply_to_id']:
-            parent_msg = cls.query.filter_by(
-                id=optional_params['reply_to_id']).first()
-
-            if not parent_msg:
-                # cannot reply to the original message - not found
-                return (False,
-                        build_error_dict(['Original message not found.']))
-            elif user.id not in parent_msg.recipient_list_ids:
-                # user not in the destination list
-                return (False,
-                        build_error_dict(['Cannot reply to this message.']))
+        resp = cls.validate_values(params)
+        errors = (
+            resp['errors.mandatory'] + resp['errors.type'] +
+            resp['errors.other'])
+        if errors:
+            return (False, build_error_dict(errors))
 
         # preparing the full param dict to be returned
-        for (k, v) in optional_params.iteritems():
-            if v is not None:
-                params[k] = v
+        for (k, v) in params.items():
+            if v in (None, '', u''):
+                del params[k]
 
         # success!
         return (True, params)
@@ -107,13 +98,12 @@ class MessageHandler(MethodView):
 
     @classmethod
     def validate_hospitality_request(cls, user):
-        success, params = cls._validate_message(PrivateMessage, user)
+        request_json = json_loads(request.data)
+
+        success, params = cls._validate_message(HospitalityRequest, user, {
+            'date_from': request_json.get('date_from'),
+            'date_to': request_json.get('date_to')})
         # TODO - status validation
-        if success:
-            recipient_list_ids = params.get('recipient_list_ids')
-            if len(recipient_list_ids) != 1:
-                return (False,
-                        build_error_dict(['Must be exactly one recipient!']))
         return (success, params)
 
     @login_required()
@@ -178,6 +168,8 @@ class MessageByIDHandler(MethodView):
     @login_required()
     def patch(self, direction, msgtype, id):
         user = get_logged_user()
+        request_json = json_loads(request.data)
+
         if msgtype not in MESSAGE_TYPE_MAPPING:
             return ('TYPE', 400, [])
         msg_dict = MESSAGE_TYPE_MAPPING[msgtype]
@@ -196,8 +188,8 @@ class MessageByIDHandler(MethodView):
         msg = msg_list[0]
 
         added_flags, removed_flags = (
-            request.json.get('flags_in'),
-            request.json.get('flags_out'))
+            request_json.get('flags_in'),
+            request_json.get('flags_out'))
 
         msg.change_flags(added_flags, removed_flags)
 
@@ -205,12 +197,12 @@ class MessageByIDHandler(MethodView):
         errors = []
 
         try:
-            msg_notification.change_status(request.json.get('message_status'))
+            msg_notification.change_status(request_json.get('message_status'))
         except ValueError:  # Invalid transition
             errors.append('Invalid "message_status" value.')
 
         if msgtype == 'hospitality_request':
-            request_status = request.json.get('request_status')
+            request_status = request_json.get('request_status')
             if (request_status and
                 ((direction == 'out' and request_status == 'canceled')
                  or direction == 'in' and msg.status != 'canceled')):

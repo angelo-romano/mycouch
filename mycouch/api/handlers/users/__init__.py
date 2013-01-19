@@ -2,7 +2,9 @@ from flask import request
 from flask.views import MethodView
 from mycouch.api.auth import login_required, get_request_token
 from mycouch.api.utils import (
-    jsonify, get_logged_user, build_error_dict, get_filter_dict, model_by_id)
+    jsonify, get_logged_user, build_error_dict, get_filter_dict,
+    model_by_id, parse_search_fields)
+from mycouch.lib.search import query
 from mycouch.models import User, UserProfileDetails
 from functools import wraps
 
@@ -29,12 +31,18 @@ class UserHandler(MethodView):
         """
         Currently not implemented.
         """
-        filter_dict = get_filter_dict(
-            request.args, ('city_id', 'gender', 'age',
-                           'n_refs', 'n_friends', 'has_details',
-                           'can_host', 'keywords'))
-        # TODO: proper search engine here
-        return jsonify([])
+        ALLOWED_FILTERS = frozenset([
+            'city_id', 'gender', 'age',
+            'n_refs', 'n_friends', 'has_details',
+            'can_host', 'keywords'])
+        search_dict = parse_search_fields()
+        if search_dict.get('fields'):
+            # only some filters are allowed
+            search_dict['fields'] = dict(
+                (k, v) for k, v in search_dict['fields'].iteritems()
+                if k in ALLOWED_FILTERS)
+        resp = query(User, **search_dict)
+        return jsonify([obj.serialized for _, obj in resp] if resp else [])
 
     def post(self):
         """

@@ -7,6 +7,7 @@ cur_dir = os.path.abspath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 sys.path.append(cur_dir)
 
+from datetime import date, timedelta
 from mycouch import app, db
 from mycouch.core.serializers import json_loads
 from mycouch.tests.fixtures import with_base_fixtures
@@ -43,7 +44,7 @@ class LocationTestCase(unittest.TestCase):
         return token, logged_user
 
     @with_base_fixtures
-    def test_this(self):
+    def test_private_messages(self):
         request = {
             'subject': 'A Test Message',
             'text': 'A test text...',
@@ -160,6 +161,68 @@ class LocationTestCase(unittest.TestCase):
             v == resp_data.get(k)
             for (k, v) in request.iteritems()))
         self.assertEquals(resp_data.get('message_status'), 'unread')
+
+    @with_base_fixtures
+    def test_hospitality_requests(self):
+        today = date.today()
+        token, logged_user = self._sender_login()
+
+        # message failure here - not allowed
+        request = {
+            'subject': 'A Hospitality Request',
+            'text': 'A test text...',
+            'recipient_list_ids': [2],
+        }
+        resp = send_call(self.app, 'post', '/messages/in/hospitality_requests',
+                         request, token=token)
+        self.assertEquals(resp.status[:3], '403')
+        # message failure here - too many recipients
+        request = {
+            'subject': 'A Hospitality Request',
+            'text': 'A test text...',
+            'recipient_list_ids': [2, 3],
+            'date_from': (today + timedelta(days=10)).strftime('%Y-%m-%d'),
+            'date_to': (today + timedelta(days=12)).strftime('%Y-%m-%d'),
+        }
+        resp = send_call(self.app, 'post', '/messages/out/hospitality_requests',
+                         request, token=token)
+        self.assertEquals(resp.status[:3], '400')
+        # message failure here - missing date_to
+        request = {
+            'subject': 'A Hospitality Request',
+            'text': 'A test text...',
+            'recipient_list_ids': [2],
+            'date_from': (today + timedelta(days=10)).strftime('%Y-%m-%d'),
+        }
+        resp = send_call(self.app, 'post', '/messages/out/hospitality_requests',
+                         request, token=token)
+        self.assertEquals(resp.status[:3], '400')
+        # message failure here - invalid date
+        request = {
+            'subject': 'A Hospitality Request',
+            'text': 'A test text...',
+            'recipient_list_ids': [2],
+            'date_from': (today - timedelta(days=10)).strftime('%Y-%m-%d'),
+            'date_to': (today + timedelta(days=12)).strftime('%Y-%m-%d'),
+        }
+        resp = send_call(self.app, 'post', '/messages/out/hospitality_requests',
+                         request, token=token)
+        self.assertEquals(resp.status[:3], '400')
+        # message being sent here
+        request = {
+            'subject': 'A Hospitality Request',
+            'text': 'A test text...',
+            'recipient_list_ids': [2],
+            'date_from': (today + timedelta(days=10)).strftime('%Y-%m-%d'),
+            'date_to': (today + timedelta(days=12)).strftime('%Y-%m-%d'),
+        }
+        resp = send_call(self.app, 'post', '/messages/out/hospitality_requests',
+                         request, token=token)
+        self.assertEquals(resp.status[:3], '200')
+        resp_data = json_loads(resp.data)
+        self.assertEquals(logged_user.get('id'), resp_data.get('sender_id'))
+        msg_id = resp_data.get('id')
+        self.assertIsNotNone(msg_id)
 
     def tearDown(self):
         pass

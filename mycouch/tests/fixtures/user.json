@@ -32,5 +32,22 @@
         "password": "414f6f20d57301c08766c70739b2d506e38edacf",
         "salt": "1356822997",
         "email": "v.delgog@mail.com"
+    },
+    {
+        "username": "msanchez",
+        "_model": "User",
+        "first_name": "Mar\u00eda",
+        "last_name": "S\u00e1nchez",
+        "created": "2013-01-06T10:48:24",
+        "city_id": 1,
+        "gender": "1",
+        "is_active": true,
+        "modified": null,
+        "id": 3,
+        "role": null,
+        "birth_date": "1989-04-14",
+        "password": "bdf68852b976be5af586ee07b57df17a853b7bb7",
+        "salt": "1357469142",
+        "email": "msanchez@mycouch.info"
     }
 ]

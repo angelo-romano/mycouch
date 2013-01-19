@@ -10,5 +10,7 @@ Flask-WTF
 geoalchemy
 jsonpickle
 psycopg2
+rawes
 requests
 simplejson
+unidecode

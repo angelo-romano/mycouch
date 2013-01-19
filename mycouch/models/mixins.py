@@ -15,6 +15,7 @@ from mycouch.core.db import Base
 from mycouch.core.db.types import (
     JSONType, HStoreType, SlugType, StateType, make_transition)
 from mycouch.core.utils import serialize_db_value, slugify
+from mycouch.lib import search
 
 
 AuthUserBase = get_user_class(Base)
@@ -95,8 +96,15 @@ class AutoInitMixin(object):
                 attr_val = attr_val.serialized
 
             resp[attr] = serialize_db_value(attr_val)
-
         return resp
+
+    def _post_commit(self, updated, inserted, deleted=None):
+        for this_list in (inserted, updated):
+            if not this_list:
+                continue
+
+            for obj in this_list:
+                search.index(obj)
 
     def save(self, commit=False):
         """
@@ -113,7 +121,12 @@ class AutoInitMixin(object):
             self.commit()
 
     def commit(self):
-        return db.session.commit()
+        _objects_to_update = db.session.dirty
+        _objects_to_insert = db.session.new
+
+        resp = db.session.commit()
+        self._post_commit(_objects_to_update, _objects_to_insert)
+        return resp
 
     def populate_from_json(self, json_dict):
         for (key, val) in json_dict.iteritems():
@@ -122,6 +135,41 @@ class AutoInitMixin(object):
                 setattr(self, key, 'POINT(%s %s)' % v)
             else:
                 setattr(self, key, val)
+
+    @classmethod
+    def _check_mandatory_fields(cls, values, mandatory_fields):
+        mandatory_field_set = set(mandatory_fields)
+        for (key, val) in values.iteritems():
+            if key in mandatory_field_set:
+                if val in ('', u'', None):
+                    # it is like it was never specified
+                    continue
+                else:
+                    # removing it
+                    mandatory_field_set.remove(key)
+
+        return mandatory_field_set
+
+    @classmethod
+    def _build_validation_dict(cls, mandatory_errors=(),
+                               type_errors=(), other_errors=()):
+        return {
+            'errors.mandatory': ['No field value for "%s".' % field
+                                 for field in mandatory_errors],
+            'errors.type': ['Invalid type for "%s".' % field
+                            for field in type_errors],
+            'errors.other': list(other_errors)}
+
+    @classmethod
+    def validate_values(cls, values):
+        # mandatory = cls._check_mandatory_fields(values)
+        return cls._build_validation_dict()
+
+    def __repr__(self):
+        return '<%s%s%s>' % (
+            self.__class__.__name__,
+            '' if not self.id else ' #%s' % self.id
+        )
 
 
 class ConnectionMixin(object):
@@ -414,12 +462,24 @@ class LocalityMixin(object):
         HStoreType, nullable=False, default={}))
 
     @property
+    def coordinates_string(self):
+        return db.session.scalar(self.coordinates.wkt)
+
+    @property
     def latitude(self):
         return db.session.scalar(self.coordinates.x)
+
+    @latitude.setter
+    def latitude(self, value):
+        self.coordinates = 'POINT(%s %s)' % (value, self.longitude)
 
     @property
     def longitude(self):
         return db.session.scalar(self.coordinates.y)
+
+    @longitude.setter
+    def longitude(self, value):
+        self.coordinates = 'POINT(%s %s)' % (self.latitude, value)
 
     @property
     def country_code(self):
